@@ -166,12 +166,19 @@
         if (lr.error) throw lr.error;
         likes = lr.data || [];
 
-        const cr = await db.from("post_comments")
-          .select("id,post_id,user_id,content,created_at")
-          .in("post_id",ids)
-          .order("created_at",{ascending:true});
-        if (cr.error) throw cr.error;
-        comentarios = cr.data || [];
+        // Los comentarios son opcionales: si falta la tabla o sus políticas,
+        // no debemos bloquear la carga de todas las publicaciones.
+        try {
+          const cr = await db.from("post_comments")
+            .select("id,post_id,user_id,content,created_at")
+            .in("post_id",ids)
+            .order("created_at",{ascending:true});
+          if (cr.error) throw cr.error;
+          comentarios = cr.data || [];
+        } catch (errorComentarios) {
+          comentarios = [];
+          console.warn("Comentarios no disponibles; el muro seguirá cargando.", errorComentarios);
+        }
       }
 
       datos.posts = remotos.map(p=>{
