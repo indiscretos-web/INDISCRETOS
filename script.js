@@ -184,6 +184,7 @@
         const likesPost = likes.filter(l=>Number(l.post_id)===Number(p.id));
         return {
           id:p.id,
+          autorId:p.user_id || null,
           grupoId:p.school_id || null,
           tipo:p.school_id ? "grupo" : "publico",
           titulo:p.title || contenido.titulo || "",
@@ -462,15 +463,16 @@ $("#postImage")?.addEventListener("change", ev => {
     return d.toLocaleString("es-AR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
   }
 
-  function premium() {
-    return datos.posts.some(p=>Number(p.likes)>=20);
+  function misPublicaciones() {
+    return datos.posts.filter(p=>p.autorId && usuario && p.autorId===usuario.id);
   }
 
   function estadosLogros() {
+    const mias=misPublicaciones();
     return {
-      primera:datos.posts.length>0,
-      popular:datos.posts.some(p=>Number(p.likes)>=5),
-      premium:premium()
+      primera:mias.length>0,
+      popular:mias.some(p=>Number(p.likes)>=5),
+      premium:mias.some(p=>Number(p.likes)>=20)
     };
   }
 
@@ -507,7 +509,7 @@ $("#postImage")?.addEventListener("change", ev => {
     if (post.texto) {
       const burbuja=document.createElement("div");
       burbuja.className="post-bubble";
-      if (premium()) {
+      if (Number(post.likes)>=20) {
         burbuja.classList.add("premium-bubble");
         burbuja.innerHTML=escapar(post.texto).split(/(\s+)/)
           .map(w=>/^\s+$/.test(w)?w:`<span class="premium-word">${w}</span>`).join("");
