@@ -718,8 +718,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   resize: vertical;
 }
 
-/* Mantener visible el título y el mensaje del encabezado en escritorio. */
-.topbar .brand { width: 100%; }
+/* Encabezado: marca a la izquierda y mensaje a la derecha, sin que se pisen. */
+.topbar { justify-content: space-between; gap: 24px; }
+.topbar .brand {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-start;
+}
+.topbar .header-message { flex: 0 0 auto; }
 
 .mobile-menu-row { display: none; }
 
