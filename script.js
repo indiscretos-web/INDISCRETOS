@@ -158,12 +158,27 @@
       const remotos = respuesta.data || [];
       const ids = remotos.map(p=>p.id);
       let likes = [];
+      let comentarios = [];
 
       if (ids.length) {
         const lr = await db.from("post_likes")
           .select("post_id,user_id").in("post_id",ids);
         if (lr.error) throw lr.error;
         likes = lr.data || [];
+
+        // Los comentarios son opcionales: si falta la tabla o sus políticas,
+        // no debemos bloquear la carga de todas las publicaciones.
+        try {
+          const cr = await db.from("post_comments")
+            .select("id,post_id,user_id,content,created_at")
+            .in("post_id",ids)
+            .order("created_at",{ascending:true});
+          if (cr.error) throw cr.error;
+          comentarios = cr.data || [];
+        } catch (errorComentarios) {
+          comentarios = [];
+          console.warn("Comentarios no disponibles; el muro seguirá cargando.", errorComentarios);
+        }
       }
 
       datos.posts = remotos.map(p=>{
@@ -173,9 +188,10 @@
         } catch (_) {
           contenido = { texto:p.content || "" };
         }
-        const likesPost = likes.filter(l=>Number(l.post_id)===Number(p.id));
+        const likesPost = likes.filter(l=>String(l.post_id)===String(p.id));
         return {
           id:p.id,
+          autorId:p.user_id || null,
           grupoId:p.school_id || null,
           tipo:p.school_id ? "grupo" : "publico",
           titulo:p.title || contenido.titulo || "",
@@ -183,6 +199,7 @@
           foto:p.image_url || "",
           likes:likesPost.length,
           liked:likesPost.some(l=>l.user_id===usuario.id),
+          comentarios:comentarios.filter(c=>String(c.post_id)===String(p.id)),
           creado:p.created_at
         };
       });
@@ -203,6 +220,21 @@
       content:JSON.stringify({texto}),
       image_url:foto || null,
       school_id:grupoId || null
+    });
+    if (r.error) throw r.error;
+    await cargarRemoto();
+  }
+
+  async function agregarComentario(postId, texto) {
+    await conectar();
+    const contenido = String(texto || "").trim();
+    if (!contenido) throw new Error("El comentario está vacío.");
+    if (contenido.length > 500) throw new Error("El comentario supera los 500 caracteres.");
+
+    const r = await db.from("post_comments").insert({
+      post_id:postId,
+      user_id:usuario.id,
+      content:contenido
     });
     if (r.error) throw r.error;
     await cargarRemoto();
@@ -269,9 +301,14 @@
     const e=escuelaPorId(datos.grupoId);
     $("#myGroup").textContent=e ? `🏫 ${e.nombre}` : "Todavía no elegiste un grupo.";
     $("#groupNotice")?.classList.toggle("hidden",Boolean(e));
-    $("#postText").disabled=false;
-    $("#postImage").disabled=false;
-    $("#publishBtn").disabled=false;
+    $("#postText").disabled=!e;
+    $("#postImage").disabled=!e;
+    $("#publishBtn").disabled=!e;
+    if ($("#postText")) {
+      $("#postText").placeholder=e
+        ? "Escribí algo para compartir con toda la comunidad..."
+        : "Primero entrá a un colegio para poder publicar...";
+    }
     dibujarFeed();
   }
 
@@ -392,6 +429,12 @@ $("#postImage")?.addEventListener("change", ev => {
 
   $("#postForm")?.addEventListener("submit",async ev=>{
     ev.preventDefault();
+    if (!tieneGrupo()) {
+      sonido("error");
+      avisar("Primero entrá a un colegio para poder publicar.");
+      cambiarVista("colegios");
+      return;
+    }
     const titulo=$("#postTitle").value.trim();
     const texto=$("#postText").value.trim();
 
@@ -405,7 +448,7 @@ $("#postImage")?.addEventListener("change", ev => {
 
     $("#publishBtn").disabled=true;
     try {
-      await publicarRemoto({titulo,texto,foto:fotoSeleccionada});
+      await publicarRemoto({titulo,texto,foto:fotoSeleccionada,grupoId:datos.grupoId});
       $("#postTitle").value="";
       $("#postText").value="";
       $("#charCount").textContent="0/1000";
@@ -427,15 +470,16 @@ $("#postImage")?.addEventListener("change", ev => {
     return d.toLocaleString("es-AR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
   }
 
-  function premium() {
-    return datos.posts.some(p=>Number(p.likes)>=20);
+  function misPublicaciones() {
+    return datos.posts.filter(p=>p.autorId && usuario && p.autorId===usuario.id);
   }
 
   function estadosLogros() {
+    const mias=misPublicaciones();
     return {
-      primera:datos.posts.length>0,
-      popular:datos.posts.some(p=>Number(p.likes)>=5),
-      premium:premium()
+      primera:mias.length>0,
+      popular:mias.some(p=>Number(p.likes)>=5),
+      premium:mias.some(p=>Number(p.likes)>=20)
     };
   }
 
@@ -472,7 +516,7 @@ $("#postImage")?.addEventListener("change", ev => {
     if (post.texto) {
       const burbuja=document.createElement("div");
       burbuja.className="post-bubble";
-      if (premium()) {
+      if (Number(post.likes)>=20) {
         burbuja.classList.add("premium-bubble");
         burbuja.innerHTML=escapar(post.texto).split(/(\s+)/)
           .map(w=>/^\s+$/.test(w)?w:`<span class="premium-word">${w}</span>`).join("");
@@ -520,6 +564,71 @@ $("#postImage")?.addEventListener("change", ev => {
     });
     acciones.append(like,reportar);
     articulo.append(acciones);
+
+    const zonaComentarios=document.createElement("section");
+    zonaComentarios.className="comments-area";
+    const tituloComentarios=document.createElement("h4");
+    tituloComentarios.className="comments-title";
+    tituloComentarios.textContent=`💬 Comentarios (${(post.comentarios || []).length})`;
+    zonaComentarios.append(tituloComentarios);
+
+    const listaComentarios=document.createElement("div");
+    listaComentarios.className="comments-list";
+    const comentariosPost=post.comentarios || [];
+    if (!comentariosPost.length) {
+      const vacio=document.createElement("p");
+      vacio.className="comments-empty";
+      vacio.textContent="Todavía no hay comentarios. ¡Sé el primero!";
+      listaComentarios.append(vacio);
+    } else {
+      comentariosPost.forEach(c=>{
+        const item=document.createElement("article");
+        item.className="comment-item";
+        const autorComentario=document.createElement("strong");
+        autorComentario.textContent="🎭 Anónimo";
+        const textoComentario=document.createElement("p");
+        textoComentario.textContent=c.content || "";
+        const fechaComentario=document.createElement("small");
+        fechaComentario.textContent=fechaBonita(c.created_at);
+        item.append(autorComentario,textoComentario,fechaComentario);
+        listaComentarios.append(item);
+      });
+    }
+    zonaComentarios.append(listaComentarios);
+
+    const formularioComentario=document.createElement("form");
+    formularioComentario.className="comment-form";
+    const entradaComentario=document.createElement("textarea");
+    entradaComentario.name="comentario";
+    entradaComentario.maxLength=500;
+    entradaComentario.rows=2;
+    entradaComentario.placeholder="Escribí un comentario (máx. 500 caracteres)...";
+    entradaComentario.setAttribute("aria-label","Escribir comentario");
+    entradaComentario.required=true;
+    const botonComentario=document.createElement("button");
+    botonComentario.type="submit";
+    botonComentario.className="secondary-btn comment-submit";
+    botonComentario.textContent="Enviar comentario";
+    formularioComentario.append(entradaComentario,botonComentario);
+    formularioComentario.addEventListener("submit",async ev=>{
+      ev.preventDefault();
+      const texto=entradaComentario.value.trim();
+      if (!texto) return;
+      botonComentario.disabled=true;
+      try {
+        await agregarComentario(post.id,texto);
+        sonido("publicar");
+        avisar("¡Comentario publicado de forma anónima! 💬");
+      } catch(error) {
+        console.error(error);
+        sonido("error");
+        avisar("No se pudo guardar el comentario. Revisá la tabla y las políticas de Supabase.");
+      } finally {
+        botonComentario.disabled=false;
+      }
+    });
+    zonaComentarios.append(formularioComentario);
+    articulo.append(zonaComentarios);
     return articulo;
   }
 

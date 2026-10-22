@@ -13,9 +13,23 @@
     <img src="img/splash-indiscretos.jpg" alt="Indiscretos" class="splash-logo">
   </div>
 
+  <header class="topbar">
     <a class="brand" href="#" data-view="inicio" aria-label="Ir al Feed">
       <img class="cartman" src="img/encabezado.png" alt="">
+      <div class="brand-text">
+        <h1>INDISCRETOS</h1>
+        <span>Decí lo que quieras...</span>
+      </div>
     </a>
+    <div class="header-message">
+      <strong>Buenos días, indiscreto 👀</strong>
+      <small>Nadie sabe quién lo escribió.</small>
+    </div>
+    <div class="online-counter" aria-label="Contador ilustrativo de actividad">
+      <span class="online-dot" aria-hidden="true"></span>
+      <span>Actividad estimada:</span>
+      <strong id="onlineCount">—</strong>
+    </div>
   </header>
 
   <div class="mobile-menu-row">
@@ -63,6 +77,7 @@
           </div>
 
           <form id="postForm">
+            <p class="tiny-note" id="groupNotice">🔒 Primero elegí un colegio en la sección Colegios para poder publicar.</p>
             <label class="sr-only" for="postText">Tu mensaje</label>
             <textarea id="postText" maxlength="1000" placeholder="Escribí lo que quieras compartir con todos..." rows="4"></textarea>
 

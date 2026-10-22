@@ -718,11 +718,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   resize: vertical;
 }
 
-/* El encabezado muestra únicamente la imagen que ya tenías. */
-.topbar .brand-text,
-.topbar .header-message { display: none !important; }
-
-.topbar .brand { width: 100%; }
+/* Encabezado: marca a la izquierda y mensaje a la derecha, sin que se pisen. */
+.topbar { justify-content: space-between; gap: 24px; }
+.topbar .brand {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-start;
+}
+.topbar .header-message { flex: 0 0 auto; }
 
 .mobile-menu-row { display: none; }
 
@@ -843,4 +847,76 @@ button:active, .upload-btn:active {
   .online-counter strong {
     font-size: 12px;
   }
+}
+
+/* Comentarios anónimos en cada publicación */
+.comments-area {
+  margin-top: 15px;
+  padding-top: 13px;
+  border-top: 1px solid var(--border);
+}
+.comments-title {
+  margin: 0 0 10px;
+  color: var(--purple-light);
+  font-size: 13px;
+  font-weight: 900;
+}
+.comments-list {
+  display: grid;
+  gap: 8px;
+}
+.comments-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.comment-item {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #191321;
+  overflow-wrap: anywhere;
+}
+.comment-item strong {
+  color: var(--yellow);
+  font-size: 11px;
+}
+.comment-item p {
+  margin: 5px 0;
+  color: var(--text);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+.comment-item small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.comment-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 11px;
+}
+.comment-form textarea {
+  width: 100%;
+  min-height: 55px;
+  resize: vertical;
+  padding: 10px 12px;
+  color: var(--text);
+  background: #17121f;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font: inherit;
+  font-size: 12px;
+}
+.comment-form textarea:focus {
+  outline: none;
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px #9860e825;
+}
+.comment-submit {
+  justify-self: start;
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .comment-submit { width: 100%; }
 }
