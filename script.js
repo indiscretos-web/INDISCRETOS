@@ -169,15 +169,36 @@
         // Los comentarios son opcionales: si falta la tabla o sus políticas,
         // no debemos bloquear la carga de todas las publicaciones.
         try {
-          const cr = await db.from("post_comments")
-            .select("id,post_id,user_id,content,created_at")
+          let cr = await db.from("post_comments")
+            .select("id,post_id,user_id,content,created_at,parent_comment_id")
             .in("post_id",ids)
             .order("created_at",{ascending:true});
+          if (cr.error) {
+            // Compatibilidad temporal mientras se ejecuta la migración de respuestas.
+            cr = await db.from("post_comments")
+              .select("id,post_id,user_id,content,created_at")
+              .in("post_id",ids)
+              .order("created_at",{ascending:true});
+          }
           if (cr.error) throw cr.error;
-          comentarios = cr.data || [];
+          comentarios = (cr.data || []).map(c=>({...c,parent_comment_id:c.parent_comment_id || null}));
         } catch (errorComentarios) {
           comentarios = [];
           console.warn("Comentarios no disponibles; el muro seguirá cargando.", errorComentarios);
+        }
+      }
+
+      let likesComentarios = [];
+      const idsComentarios = comentarios.map(c=>c.id);
+      if (idsComentarios.length) {
+        try {
+          const lcr = await db.from("post_comment_likes")
+            .select("comment_id,user_id")
+            .in("comment_id",idsComentarios);
+          if (lcr.error) throw lcr.error;
+          likesComentarios = lcr.data || [];
+        } catch (errorLikesComentarios) {
+          console.warn("Likes de comentarios no disponibles; ejecutá supabase-comment-replies-likes.sql.", errorLikesComentarios);
         }
       }
 
@@ -199,7 +220,14 @@
           foto:p.image_url || "",
           likes:likesPost.length,
           liked:likesPost.some(l=>l.user_id===usuario.id),
-          comentarios:comentarios.filter(c=>String(c.post_id)===String(p.id)),
+          comentarios:comentarios.filter(c=>String(c.post_id)===String(p.id)).map(c=>{
+            const likesComentario = likesComentarios.filter(l=>String(l.comment_id)===String(c.id));
+            return {
+              ...c,
+              likes:likesComentario.length,
+              liked:likesComentario.some(l=>l.user_id===usuario.id)
+            };
+          }),
           creado:p.created_at
         };
       });
@@ -225,18 +253,45 @@
     await cargarRemoto();
   }
 
-  async function agregarComentario(postId, texto) {
+  async function agregarComentario(postId, texto, parentCommentId = null) {
     await conectar();
     const contenido = String(texto || "").trim();
     if (!contenido) throw new Error("El comentario está vacío.");
     if (contenido.length > 500) throw new Error("El comentario supera los 500 caracteres.");
 
-    const r = await db.from("post_comments").insert({
+    const nuevoComentario = {
       post_id:postId,
       user_id:usuario.id,
       content:contenido
-    });
+    };
+    if (parentCommentId !== null) nuevoComentario.parent_comment_id = parentCommentId;
+
+    const r = await db.from("post_comments").insert(nuevoComentario);
     if (r.error) throw r.error;
+    await cargarRemoto();
+  }
+
+  async function cambiarLikeComentario(comentario) {
+    await conectar();
+    const encontrado = await db.from("post_comment_likes")
+      .select("comment_id")
+      .eq("comment_id",comentario.id)
+      .eq("user_id",usuario.id)
+      .maybeSingle();
+    if (encontrado.error) throw encontrado.error;
+
+    if (encontrado.data) {
+      const r = await db.from("post_comment_likes").delete()
+        .eq("comment_id",comentario.id)
+        .eq("user_id",usuario.id);
+      if (r.error) throw r.error;
+    } else {
+      const r = await db.from("post_comment_likes").insert({
+        comment_id:comentario.id,
+        user_id:usuario.id
+      });
+      if (r.error) throw r.error;
+    }
     await cargarRemoto();
   }
 
@@ -483,6 +538,117 @@ $("#postImage")?.addEventListener("change", ev => {
     };
   }
 
+  function construirArbolComentarios(comentarios) {
+    const porId = new Map();
+    comentarios.forEach(c=>porId.set(String(c.id),{...c,respuestas:[]}));
+    const raices = [];
+    porId.forEach(c=>{
+      const padre = c.parent_comment_id !== null && c.parent_comment_id !== undefined
+        ? porId.get(String(c.parent_comment_id))
+        : null;
+      if (padre) padre.respuestas.push(c);
+      else raices.push(c);
+    });
+    return raices;
+  }
+
+  function crearFormularioComentario(postId, parentCommentId) {
+    const formulario=document.createElement("form");
+    formulario.className="comment-form";
+    const entrada=document.createElement("textarea");
+    entrada.name="comentario";
+    entrada.maxLength=500;
+    entrada.rows=2;
+    entrada.placeholder=parentCommentId===null
+      ? "Escribí un comentario (máx. 500 caracteres)..."
+      : "Escribí tu respuesta (máx. 500 caracteres)...";
+    entrada.setAttribute("aria-label",parentCommentId===null?"Escribir comentario":"Escribir respuesta");
+    entrada.required=true;
+    const boton=document.createElement("button");
+    boton.type="submit";
+    boton.className="secondary-btn comment-submit";
+    boton.textContent=parentCommentId===null?"Enviar comentario":"Enviar respuesta";
+    formulario.append(entrada,boton);
+    formulario.addEventListener("submit",async ev=>{
+      ev.preventDefault();
+      const texto=entrada.value.trim();
+      if (!texto) return;
+      boton.disabled=true;
+      try {
+        await agregarComentario(postId,texto,parentCommentId);
+        sonido("publicar");
+        avisar(parentCommentId===null?"¡Comentario publicado de forma anónima! 💬":"¡Respuesta publicada de forma anónima! 💬");
+      } catch(error) {
+        console.error(error);
+        sonido("error");
+        avisar("No se pudo guardar. Ejecutá la actualización SQL de comentarios y revisá las políticas.");
+      } finally {
+        boton.disabled=false;
+      }
+    });
+    return formulario;
+  }
+
+  function dibujarComentario(comentario, postId) {
+    const item=document.createElement("article");
+    item.className="comment-item";
+    const autor=document.createElement("strong");
+    autor.textContent="🎭 Anónimo";
+    const texto=document.createElement("p");
+    texto.textContent=comentario.content || "";
+    const fecha=document.createElement("small");
+    fecha.textContent=fechaBonita(comentario.created_at);
+    item.append(autor,texto,fecha);
+
+    const acciones=document.createElement("div");
+    acciones.className="comment-actions";
+    const like=document.createElement("button");
+    like.type="button";
+    like.className=`comment-like-btn${comentario.liked?" liked":""}`;
+    like.textContent=`${comentario.liked?"❤️":"🤍"} ${Number(comentario.likes)||0}`;
+    like.setAttribute("aria-label",comentario.liked?"Quitar like al comentario":"Dar like al comentario");
+    like.addEventListener("click",async()=>{
+      like.disabled=true;
+      try {
+        await cambiarLikeComentario(comentario);
+        sonido("like");
+      } catch(error) {
+        console.error(error);
+        sonido("error");
+        avisar("No se pudo dar like al comentario. Ejecutá la actualización SQL y probá de nuevo.");
+      } finally {
+        like.disabled=false;
+      }
+    });
+
+    const responder=document.createElement("button");
+    responder.type="button";
+    responder.className="comment-reply-btn";
+    responder.textContent="↩ Responder";
+    responder.addEventListener("click",()=>{
+      let formulario=item.querySelector(":scope > .comment-form");
+      if (formulario) {
+        formulario.remove();
+        responder.textContent="↩ Responder";
+      } else {
+        formulario=crearFormularioComentario(postId,comentario.id);
+        item.append(formulario);
+        responder.textContent="Cancelar respuesta";
+        formulario.querySelector("textarea")?.focus();
+      }
+    });
+    acciones.append(like,responder);
+    item.append(acciones);
+
+    if (comentario.respuestas?.length) {
+      const respuestas=document.createElement("div");
+      respuestas.className="comment-replies";
+      comentario.respuestas.forEach(r=>respuestas.append(dibujarComentario(r,postId)));
+      item.append(respuestas);
+    }
+    return item;
+  }
+
   function crearPost(post) {
     const e=escuelaPorId(post.grupoId);
     const articulo=document.createElement("article");
@@ -567,67 +733,26 @@ $("#postImage")?.addEventListener("change", ev => {
 
     const zonaComentarios=document.createElement("section");
     zonaComentarios.className="comments-area";
+    const comentariosPost=post.comentarios || [];
+    const arbolComentarios=construirArbolComentarios(comentariosPost);
+    const contarComentarios = lista => lista.reduce((n,c)=>n+1+contarComentarios(c.respuestas || []),0);
     const tituloComentarios=document.createElement("h4");
     tituloComentarios.className="comments-title";
-    tituloComentarios.textContent=`💬 Comentarios (${(post.comentarios || []).length})`;
+    tituloComentarios.textContent=`💬 Comentarios (${contarComentarios(arbolComentarios)})`;
     zonaComentarios.append(tituloComentarios);
 
     const listaComentarios=document.createElement("div");
     listaComentarios.className="comments-list";
-    const comentariosPost=post.comentarios || [];
-    if (!comentariosPost.length) {
+    if (!arbolComentarios.length) {
       const vacio=document.createElement("p");
       vacio.className="comments-empty";
       vacio.textContent="Todavía no hay comentarios. ¡Sé el primero!";
       listaComentarios.append(vacio);
     } else {
-      comentariosPost.forEach(c=>{
-        const item=document.createElement("article");
-        item.className="comment-item";
-        const autorComentario=document.createElement("strong");
-        autorComentario.textContent="🎭 Anónimo";
-        const textoComentario=document.createElement("p");
-        textoComentario.textContent=c.content || "";
-        const fechaComentario=document.createElement("small");
-        fechaComentario.textContent=fechaBonita(c.created_at);
-        item.append(autorComentario,textoComentario,fechaComentario);
-        listaComentarios.append(item);
-      });
+      arbolComentarios.forEach(c=>listaComentarios.append(dibujarComentario(c,post.id)));
     }
     zonaComentarios.append(listaComentarios);
-
-    const formularioComentario=document.createElement("form");
-    formularioComentario.className="comment-form";
-    const entradaComentario=document.createElement("textarea");
-    entradaComentario.name="comentario";
-    entradaComentario.maxLength=500;
-    entradaComentario.rows=2;
-    entradaComentario.placeholder="Escribí un comentario (máx. 500 caracteres)...";
-    entradaComentario.setAttribute("aria-label","Escribir comentario");
-    entradaComentario.required=true;
-    const botonComentario=document.createElement("button");
-    botonComentario.type="submit";
-    botonComentario.className="secondary-btn comment-submit";
-    botonComentario.textContent="Enviar comentario";
-    formularioComentario.append(entradaComentario,botonComentario);
-    formularioComentario.addEventListener("submit",async ev=>{
-      ev.preventDefault();
-      const texto=entradaComentario.value.trim();
-      if (!texto) return;
-      botonComentario.disabled=true;
-      try {
-        await agregarComentario(post.id,texto);
-        sonido("publicar");
-        avisar("¡Comentario publicado de forma anónima! 💬");
-      } catch(error) {
-        console.error(error);
-        sonido("error");
-        avisar("No se pudo guardar el comentario. Revisá la tabla y las políticas de Supabase.");
-      } finally {
-        botonComentario.disabled=false;
-      }
-    });
-    zonaComentarios.append(formularioComentario);
+    zonaComentarios.append(crearFormularioComentario(post.id,null));
     articulo.append(zonaComentarios);
     return articulo;
   }
