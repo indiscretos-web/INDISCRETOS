@@ -1,0 +1,697 @@
+// INDISCRETOS — versión conectada a Supabase
+(() => {
+  "use strict";
+
+  const $ = s => document.querySelector(s);
+  const STORAGE_KEY = "indiscretos_v2_data";
+  const SUPABASE_URL = "https://akrwawkfazuopkxxitzs.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_q3E2D87zvkwBiLVygIwdtA_RpK3q1Fd";
+
+  let db = null;
+  let usuario = null;
+  let datos = { grupoId: null, posts: [], reportes: [] };
+  let fotoSeleccionada = "";
+  let toastTimer;
+
+  const escuelas = [
+    { id:"rivadavia", nombre:'Colegio N° 1 D.E. 3 "Bernardino Rivadavia"', direccion:"Av. San Juan 1545, Constitución, CABA", mapa:"Av. San Juan 1545, Constitución, Ciudad Autónoma de Buenos Aires, Argentina" },
+    { id:"sarmiento", nombre:'Colegio N° 2 D.E. 1 "Domingo Faustino Sarmiento"', direccion:"Libertad 1257, Retiro", mapa:"Libertad 1257, Retiro, Ciudad Autónoma de Buenos Aires, Argentina" },
+    { id:"moreno", nombre:'Colegio N° 3 D.E. 2 "Mariano Moreno"', direccion:"Av. Rivadavia 3577, Almagro", mapa:"Av. Rivadavia 3577, Almagro, Ciudad Autónoma de Buenos Aires, Argentina" },
+    { id:"avellaneda", nombre:'Colegio N° 4 D.E. 9 "Nicolás Avellaneda"', direccion:"El Salvador 5528, Palermo", mapa:"El Salvador 5528, Palermo, Ciudad Autónoma de Buenos Aires, Argentina" },
+    { id:"pueyrredon", nombre:'Colegio N° 7 D.E. 3 "Juan Martín de Pueyrredón"', direccion:"Chacabuco 922, San Telmo", mapa:"Chacabuco 922, San Telmo, Ciudad Autónoma de Buenos Aires, Argentina" },
+    { id:"roca", nombre:'Colegio N° 8 D.E. 10 "Julio A. Roca"', direccion:"Conesa 3142, Belgrano", mapa:"Conesa 3142, Belgrano, Ciudad Autónoma de Buenos Aires, Argentina" },
+    { id:"san-martin", nombre:'Colegio N° 10 D.E. 8 "José de San Martín"', direccion:"Av. Chiclana 4043, Balvanera", mapa:"Av. Chiclana 4043, Balvanera, Ciudad Autónoma de Buenos Aires, Argentina" },
+    { id:"espora", nombre:'Colegio N° 13 D.E. 18 "Cnel. de Marina Tomás Espora"', direccion:"Av. Álvarez Jonte 5075, Monte Castro", mapa:"Av. Álvarez Jonte 5075, Monte Castro, Ciudad Autónoma de Buenos Aires, Argentina" },
+    { id:"escuela-del-sol", nombre:"Escuela del Sol", direccion:"C. 125 659", mapa:"C. 125 659, Buenos Aires, Argentina" },
+    { id:"ees-41", nombre:"EES N.º 41", direccion:"C. 24 3187", mapa:"C. 24 3187, Buenos Aires, Argentina" },
+    { id:"secundaria-38", nombre:"Escuela Secundaria N.º 38", direccion:"C. 9 3151", mapa:"C. 9 3151, Buenos Aires, Argentina" }
+  ];
+
+  const logros = [
+    { id:"primera", icono:"💬", titulo:"Primera publicación", descripcion:"Publicá tu primer mensaje.", premio:"Insignia Primer Paso" },
+    { id:"popular", icono:"🔥", titulo:"Empieza a sonar", descripcion:"Conseguí 5 likes en una publicación.", premio:"Insignia Popular" },
+    { id:"premium", icono:"✨", titulo:"Estrella de Indiscretos", descripcion:"Conseguí 20 likes en una publicación.", premio:"Palabras subrayadas Premium" }
+  ];
+
+  function sonido(tipo = "click") {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const notas = {
+        click:[[520,.055,"square"]],
+        publicar:[[440,.08,"triangle"],[660,.09,"triangle"],[880,.12,"triangle"]],
+        like:[[660,.06,"sine"],[880,.09,"sine"]],
+        grupo:[[392,.08,"square"],[587,.08,"square"],[784,.13,"square"]],
+        logro:[[523,.08,"triangle"],[659,.08,"triangle"],[784,.08,"triangle"],[1046,.16,"triangle"]],
+        foto:[[740,.045,"square"],[988,.07,"square"]],
+        reporte:[[330,.1,"sawtooth"],[220,.14,"sawtooth"]],
+        error:[[260,.1,"square"],[190,.12,"square"]],
+        salir:[[660,.07,"square"],[440,.1,"square"]]
+      }[tipo] || [[520,.055,"square"]];
+
+      let t = ctx.currentTime;
+      notas.forEach(([f,d,w]) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = w;
+        osc.frequency.setValueAtTime(f,t);
+        gain.gain.setValueAtTime(.0001,t);
+        gain.gain.exponentialRampToValueAtTime(.07,t+.012);
+        gain.gain.exponentialRampToValueAtTime(.0001,t+d);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t+d+.015);
+        t += d*.82;
+      });
+      setTimeout(() => ctx.close().catch(()=>{}),900);
+    } catch (_) {}
+  }
+
+  function avisar(mensaje) {
+    const toast = $("#toast");
+    if (!toast) return;
+    toast.textContent = mensaje;
+    toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"),2800);
+  }
+
+  function escapar(texto) {
+    return String(texto ?? "").replace(/[&<>"']/g,c=>({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    })[c]);
+  }
+
+  function normalizar(texto) {
+    return String(texto || "").normalize("NFD")
+      .replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+  }
+
+  function escuelaPorId(id) {
+    return escuelas.find(e=>e.id===id);
+  }
+
+  function tieneGrupo() {
+    return Boolean(escuelaPorId(datos.grupoId));
+  }
+
+  function guardarLocal() {
+    try {
+      localStorage.setItem(STORAGE_KEY,JSON.stringify({
+        grupoId:datos.grupoId,
+        posts:datos.posts,
+        reportes:datos.reportes
+      }));
+      return true;
+    } catch (_) {
+      avisar("No se pudo guardar en este navegador.");
+      return false;
+    }
+  }
+
+  function cargarLocal() {
+    try {
+      const d = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (d) {
+        datos.grupoId = d.grupoId || null;
+        datos.posts = Array.isArray(d.posts) ? d.posts : [];
+        datos.reportes = Array.isArray(d.reportes) ? d.reportes : [];
+      }
+    } catch (_) {}
+  }
+
+  async function conectar() {
+    if (db && usuario) return;
+    if (!window.supabase?.createClient) {
+      await new Promise((resolve,reject)=>{
+        const s=document.createElement("script");
+        s.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+        s.onload=resolve;
+        s.onerror=()=>reject(new Error("No se pudo cargar Supabase."));
+        document.head.appendChild(s);
+      });
+    }
+
+    db = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+    const sesion = await db.auth.getSession();
+    if (sesion.error) throw sesion.error;
+
+    if (sesion.data.session) {
+      usuario = sesion.data.session.user;
+    } else {
+      const resultado = await db.auth.signInAnonymously();
+      if (resultado.error) throw resultado.error;
+      usuario = resultado.data.user;
+    }
+  }
+
+  async function cargarRemoto(mostrarError = false) {
+    try {
+      await conectar();
+
+      const respuesta = await db.from("posts")
+        .select("*").order("created_at",{ascending:false}).limit(200);
+      if (respuesta.error) throw respuesta.error;
+
+      const remotos = respuesta.data || [];
+      const ids = remotos.map(p=>p.id);
+      let likes = [];
+
+      if (ids.length) {
+        const lr = await db.from("post_likes")
+          .select("post_id,user_id").in("post_id",ids);
+        if (lr.error) throw lr.error;
+        likes = lr.data || [];
+      }
+
+      datos.posts = remotos.map(p=>{
+        let contenido = {};
+        try {
+          contenido = JSON.parse(p.content || "{}");
+        } catch (_) {
+          contenido = { texto:p.content || "" };
+        }
+        const likesPost = likes.filter(l=>Number(l.post_id)===Number(p.id));
+        return {
+          id:p.id,
+          grupoId:p.school_id || null,
+          tipo:p.school_id ? "grupo" : "publico",
+          titulo:p.title || contenido.titulo || "",
+          texto:contenido.texto ?? p.content ?? "",
+          foto:p.image_url || "",
+          likes:likesPost.length,
+          liked:likesPost.some(l=>l.user_id===usuario.id),
+          creado:p.created_at
+        };
+      });
+
+      dibujarTodo();
+    } catch (error) {
+      console.error("Supabase:",error);
+      if (mostrarError) avisar("No se pudo conectar. Revisá la configuración de Supabase.");
+    }
+  }
+
+  async function publicarRemoto({titulo,texto,foto="",grupoId=null}) {
+    await conectar();
+    const r = await db.from("posts").insert({
+      user_id:usuario.id,
+      author_name:"Anónimo",
+      title:titulo,
+      content:JSON.stringify({texto}),
+      image_url:foto || null,
+      school_id:grupoId || null
+    });
+    if (r.error) throw r.error;
+    await cargarRemoto();
+  }
+
+  async function cambiarLike(post) {
+    await conectar();
+    const encontrado = await db.from("post_likes")
+      .select("post_id").eq("post_id",post.id)
+      .eq("user_id",usuario.id).maybeSingle();
+    if (encontrado.error) throw encontrado.error;
+
+    if (encontrado.data) {
+      const r = await db.from("post_likes").delete()
+        .eq("post_id",post.id).eq("user_id",usuario.id);
+      if (r.error) throw r.error;
+    } else {
+      const r = await db.from("post_likes").insert({
+        post_id:post.id,user_id:usuario.id
+      });
+      if (r.error) throw r.error;
+    }
+    await cargarRemoto();
+  }
+
+  function crearMapa(e) {
+    const a=document.createElement("a");
+    a.href="https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(e.mapa);
+    a.target="_blank";
+    a.rel="noopener noreferrer";
+    a.className="map-link";
+    a.textContent="📍 Ver ubicación en Google Maps";
+    a.addEventListener("click",()=>sonido("click"));
+    return a;
+  }
+
+  function cambiarVista(vista) {
+    document.querySelectorAll(".view").forEach(e=>e.classList.add("hidden"));
+    const seleccionada=$("#view-"+vista);
+    if (seleccionada) seleccionada.classList.remove("hidden");
+    document.querySelectorAll(".nav-btn").forEach(b=>{
+      b.classList.toggle("active",b.dataset.view===vista);
+    });
+    $("#sidebar")?.classList.remove("open");
+    if (vista==="colegios") dibujarEscuelas();
+    if (vista==="grupo") dibujarGrupo();
+    if (vista==="logros") dibujarLogros();
+  }
+
+  document.querySelectorAll("[data-view]").forEach(b=>{
+    b.addEventListener("click",ev=>{
+      ev.preventDefault();
+      sonido("click");
+      cambiarVista(b.dataset.view);
+    });
+  });
+
+  $("#mobileMenu")?.addEventListener("click",()=>{
+    sonido("click");
+    $("#sidebar")?.classList.toggle("open");
+  });
+
+  function actualizarGrupo() {
+    const e=escuelaPorId(datos.grupoId);
+    $("#myGroup").textContent=e ? `🏫 ${e.nombre}` : "Todavía no elegiste un grupo.";
+    $("#groupNotice")?.classList.toggle("hidden",Boolean(e));
+    $("#postText").disabled=false;
+    $("#postImage").disabled=false;
+    $("#publishBtn").disabled=false;
+    dibujarFeed();
+  }
+
+  function entrarGrupo(id) {
+    if (tieneGrupo()) {
+      sonido("error");
+      avisar("Ya pertenecés a un grupo. Salí del actual para cambiar.");
+      return;
+    }
+    const e=escuelaPorId(id);
+    if (!e) return;
+    datos.grupoId=id;
+    guardarLocal();
+    actualizarGrupo();
+    dibujarEscuelas();
+    dibujarGrupo();
+    sonido("grupo");
+    avisar(`¡Entraste a ${e.nombre}!`);
+    cambiarVista("grupo");
+  }
+
+  $("#changeGroupBtn")?.addEventListener("click",()=>{
+    sonido("salir");
+    if (!confirm("¿Querés salir de tu grupo actual?")) return;
+    datos.grupoId=null;
+    guardarLocal();
+    actualizarGrupo();
+    dibujarEscuelas();
+    cambiarVista("colegios");
+    avisar("Saliste del grupo. Ahora podés elegir otro.");
+  });
+
+  function dibujarEscuelas(filtro = $("#schoolSearch")?.value || "") {
+    const lista=$("#schoolList");
+    if (!lista) return;
+    lista.replaceChildren();
+    const resultados=escuelas.filter(e=>normalizar(e.nombre+" "+e.direccion).includes(normalizar(filtro)));
+
+    if (!resultados.length) {
+      lista.innerHTML='<div class="empty-state">🔎 No encontramos ese colegio.</div>';
+      return;
+    }
+
+    resultados.forEach(e=>{
+      const actual=datos.grupoId===e.id;
+      const ocupado=tieneGrupo()&&!actual;
+      const tarjeta=document.createElement("article");
+      tarjeta.className="school-card";
+      const emoji=document.createElement("div");
+      emoji.className="school-emoji";
+      emoji.textContent="🏫";
+      const info=document.createElement("div");
+      info.className="school-info";
+      const nombre=document.createElement("h3");
+      nombre.textContent=e.nombre;
+      const direccion=document.createElement("p");
+      direccion.textContent="📍 "+e.direccion;
+      const estado=document.createElement("p");
+      estado.textContent=actual?"✓ Tu grupo actual":ocupado?"Ya pertenecés a otro grupo.":"Entrá para participar en este grupo.";
+      info.append(nombre,direccion,crearMapa(e),estado);
+      const boton=document.createElement("button");
+      boton.className=actual?"secondary-btn":"primary-btn";
+      boton.textContent=actual?"Mi grupo ✓":"Entrar";
+      boton.disabled=actual||ocupado;
+      if (!boton.disabled) boton.addEventListener("click",()=>entrarGrupo(e.id));
+      tarjeta.append(emoji,info,boton);
+      lista.append(tarjeta);
+    });
+  }
+
+  $("#schoolSearch")?.addEventListener("input",ev=>dibujarEscuelas(ev.target.value));
+
+  
+if ($("#postForm") && $("#postText") && !$("#postTitle")) {
+  const tituloInput = document.createElement("input");
+  tituloInput.id = "postTitle";
+  tituloInput.type = "text";
+  tituloInput.maxLength = 90;
+  tituloInput.placeholder = "Poné un título que llame la atención...";
+  tituloInput.setAttribute("aria-label", "Título de la publicación");
+  tituloInput.className = "post-title-input";
+
+    $("#postForm").insertBefore(tituloInput, $("#postText"));
+}
+
+$("#postImage")?.addEventListener("change", ev => {
+    const archivo=ev.target.files[0];
+    if (!archivo) return;
+    if (!archivo.type.startsWith("image/")) {
+      sonido("error"); avisar("Elegí una imagen válida."); ev.target.value=""; return;
+    }
+    if (archivo.size>3*1024*1024) {
+      sonido("error"); avisar("La foto debe pesar menos de 3 MB."); ev.target.value=""; return;
+    }
+    const lector=new FileReader();
+    lector.onload=()=>{
+      sonido("foto");
+      fotoSeleccionada=lector.result;
+      $("#previewImage").src=fotoSeleccionada;
+      $("#imagePreview").classList.remove("hidden");
+    };
+    lector.onerror=()=>avisar("No se pudo leer la foto.");
+    lector.readAsDataURL(archivo);
+  });
+
+  function quitarFoto() {
+    if (fotoSeleccionada) sonido("click");
+    fotoSeleccionada="";
+    if ($("#postImage")) $("#postImage").value="";
+    $("#previewImage")?.removeAttribute("src");
+    $("#imagePreview")?.classList.add("hidden");
+  }
+
+  $("#removeImage")?.addEventListener("click",quitarFoto);
+  $("#postText")?.addEventListener("input",()=>{
+    $("#charCount").textContent=`${$("#postText").value.length}/1000`;
+  });
+
+  $("#postForm")?.addEventListener("submit",async ev=>{
+    ev.preventDefault();
+    const titulo=$("#postTitle").value.trim();
+    const texto=$("#postText").value.trim();
+
+    if (!titulo) {
+      sonido("error"); avisar("Poné un título para tu publicación.");
+      $("#postTitle").focus(); return;
+    }
+    if (!texto&&!fotoSeleccionada) {
+      sonido("error"); avisar("Escribí algo o agregá una foto."); return;
+    }
+
+    $("#publishBtn").disabled=true;
+    try {
+      await publicarRemoto({titulo,texto,foto:fotoSeleccionada});
+      $("#postTitle").value="";
+      $("#postText").value="";
+      $("#charCount").textContent="0/1000";
+      quitarFoto();
+      sonido("publicar");
+      avisar("¡Publicación compartida con todos! 💬");
+    } catch (error) {
+      console.error(error);
+      sonido("error");
+      avisar("No se pudo publicar. Revisá Supabase y sus políticas.");
+    } finally {
+      $("#publishBtn").disabled=false;
+    }
+  });
+
+  function fechaBonita(fecha) {
+    const d=new Date(fecha);
+    if (Number.isNaN(d.getTime())) return "Hace un rato";
+    return d.toLocaleString("es-AR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
+  }
+
+  function premium() {
+    return datos.posts.some(p=>Number(p.likes)>=20);
+  }
+
+  function estadosLogros() {
+    return {
+      primera:datos.posts.length>0,
+      popular:datos.posts.some(p=>Number(p.likes)>=5),
+      premium:premium()
+    };
+  }
+
+  function crearPost(post) {
+    const e=escuelaPorId(post.grupoId);
+    const articulo=document.createElement("article");
+    articulo.className="post-card";
+    const cabecera=document.createElement("div");
+    cabecera.className="post-header";
+    const avatar=document.createElement("div");
+    avatar.className="anonymous-avatar";
+    avatar.textContent="🎭";
+    const identidad=document.createElement("div");
+    const autor=document.createElement("div");
+    autor.className="post-author";
+    autor.textContent="Publicado por Anónimo";
+    const fecha=document.createElement("div");
+    fecha.className="post-meta";
+    fecha.textContent=fechaBonita(post.creado);
+    const etiqueta=document.createElement("div");
+    etiqueta.className="school-tag";
+    etiqueta.textContent=post.tipo==="grupo"&&e?`🌎 Feed · 🏫 ${e.nombre}`:"🌎 Publicación pública";
+    identidad.append(autor,fecha,etiqueta);
+    cabecera.append(avatar,identidad);
+    articulo.append(cabecera);
+
+    if (post.titulo) {
+      const h=document.createElement("h3");
+      h.className="post-title";
+      h.textContent=post.titulo;
+      articulo.append(h);
+    }
+
+    if (post.texto) {
+      const burbuja=document.createElement("div");
+      burbuja.className="post-bubble";
+      if (premium()) {
+        burbuja.classList.add("premium-bubble");
+        burbuja.innerHTML=escapar(post.texto).split(/(\s+)/)
+          .map(w=>/^\s+$/.test(w)?w:`<span class="premium-word">${w}</span>`).join("");
+      } else burbuja.textContent=post.texto;
+      articulo.append(burbuja);
+    }
+
+    if (post.foto) {
+      const img=document.createElement("img");
+      img.className="post-image";
+      img.src=post.foto;
+      img.alt="Foto compartida en la publicación";
+      img.loading="lazy";
+      articulo.append(img);
+    }
+
+    const acciones=document.createElement("div");
+    acciones.className="post-actions";
+    const like=document.createElement("button");
+    like.className=`like-btn${post.liked?" liked":""}`;
+    like.textContent=`${post.liked?"❤️":"🤍"} ${Number(post.likes)||0} likes`;
+    like.addEventListener("click",async()=>{
+      like.disabled=true;
+      try {
+        await cambiarLike(post);
+        sonido("like");
+      } catch (error) {
+        console.error(error);
+        sonido("error");
+        avisar("No se pudo guardar el like. Probá de nuevo.");
+      } finally {
+        like.disabled=false;
+      }
+    });
+
+    const reportar=document.createElement("button");
+    reportar.className="report-btn";
+    reportar.textContent="⚑ Reportar";
+    reportar.addEventListener("click",()=>{
+      sonido("reporte");
+      if (!confirm("¿Querés reportar esta publicación?")) return;
+      if (!datos.reportes.includes(post.id)) datos.reportes.push(post.id);
+      guardarLocal();
+      avisar("Reporte guardado en este navegador; todavía no se envía a un administrador.");
+    });
+    acciones.append(like,reportar);
+    articulo.append(acciones);
+    return articulo;
+  }
+
+  function dibujarFeed() {
+    const feed=$("#feed");
+    if (!feed) return;
+    feed.replaceChildren();
+    if (!datos.posts.length) {
+      feed.innerHTML='<div class="empty-state"><div class="empty-emoji">💬</div><strong>El muro está tranquilo...</strong><p>¡Podés empezar la conversación!</p></div>';
+      return;
+    }
+    datos.posts.forEach(p=>feed.append(crearPost(p)));
+  }
+
+  function dibujarGrupo() {
+    const e=escuelaPorId(datos.grupoId);
+    const detalles=$("#groupDetails");
+    const feed=$("#groupFeed");
+    const boton=$("#changeGroupBtn");
+    if (!detalles||!feed||!boton) return;
+    detalles.replaceChildren();
+    feed.replaceChildren();
+    boton.classList.toggle("hidden",!e);
+
+    if (!e) {
+      detalles.innerHTML="<h3>👀 Todavía no tenés grupo</h3><p>Elegí tu colegio para participar en su muro.</p>";
+      feed.innerHTML='<div class="empty-state"><div class="empty-emoji">🏫</div>Tu comunidad te espera.</div>';
+      return;
+    }
+
+    const etiqueta=document.createElement("span");
+    etiqueta.className="eyebrow";
+    etiqueta.textContent="TU GRUPO ACTUAL";
+    const titulo=document.createElement("h3");
+    titulo.textContent="🏫 "+e.nombre;
+    const direccion=document.createElement("p");
+    direccion.textContent="📍 "+e.direccion;
+    detalles.append(etiqueta,titulo,direccion,crearMapa(e));
+
+    const form=document.createElement("form");
+    form.className="group-composer";
+    form.innerHTML=`
+      <h3>🔒 Mensaje de mi grupo</h3>
+      <p>El mensaje aparece en el muro de tu colegio y también en el Feed general.</p>
+      <input class="post-title-input" name="titulo" maxlength="90" placeholder="Título del mensaje" required>
+      <textarea name="texto" maxlength="1000" placeholder="¿Qué querés contarle a tu grupo?" rows="3" required></textarea>
+      <button class="primary-btn" type="submit">Publicar en mi grupo</button>`;
+
+    form.addEventListener("submit",async ev=>{
+      ev.preventDefault();
+      const titulo=form.elements.titulo.value.trim();
+      const texto=form.elements.texto.value.trim();
+      if (!titulo||!texto) {
+        sonido("error"); avisar("Completá el título y el mensaje."); return;
+      }
+      const b=form.querySelector("button");
+      b.disabled=true;
+      try {
+        await publicarRemoto({titulo,texto,grupoId:e.id});
+        sonido("publicar");
+        avisar("¡Mensaje publicado en tu grupo y en el Feed! 🔒");
+      } catch (error) {
+        console.error(error);
+        sonido("error");
+        avisar("No se pudo publicar. Revisá la conexión con Supabase.");
+      } finally {
+        b.disabled=false;
+      }
+    });
+    detalles.append(form);
+
+    const publicaciones=datos.posts.filter(p=>p.grupoId===e.id&&p.tipo==="grupo");
+    if (!publicaciones.length) {
+      feed.innerHTML='<div class="empty-state"><div class="empty-emoji">💬</div><strong>Todavía no hay publicaciones</strong><p>¡Animate a empezar la conversación!</p></div>';
+      return;
+    }
+    publicaciones.forEach(p=>feed.append(crearPost(p)));
+  }
+
+  function dibujarLogros() {
+    const cont=$("#achievementList");
+    if (!cont) return;
+    cont.replaceChildren();
+    const estado=estadosLogros();
+    const desbloqueados=logros.filter(l=>estado[l.id]).length;
+    $("#unlockedCount").textContent=desbloqueados;
+    $("#totalAchievements").textContent=logros.length;
+    $("#achievementProgress").style.width=(desbloqueados/logros.length*100)+"%";
+
+    logros.forEach(l=>{
+      const ok=Boolean(estado[l.id]);
+      const tarjeta=document.createElement("article");
+      tarjeta.className=`achievement-card${ok?" unlocked":""}`;
+      const icono=document.createElement("div");
+      icono.className="achievement-icon";
+      icono.textContent=ok?l.icono:"🔒";
+      const texto=document.createElement("div");
+      texto.className="achievement-copy";
+      const titulo=document.createElement("h3");
+      titulo.textContent=l.titulo;
+      const desc=document.createElement("p");
+      desc.textContent=l.descripcion;
+      const premioTexto=document.createElement("p");
+      premioTexto.textContent="🎁 Premio: "+l.premio;
+      const estadoTexto=document.createElement("span");
+      estadoTexto.className="achievement-status";
+      estadoTexto.textContent=ok?"✓ DESBLOQUEADO":"🔒 PENDIENTE";
+      texto.append(titulo,desc,premioTexto,estadoTexto);
+      tarjeta.append(icono,texto);
+      cont.append(tarjeta);
+    });
+
+    const siguiente=logros.find(l=>!estado[l.id]);
+    $("#nextAchievement").textContent=siguiente
+      ?`${siguiente.icono} ${siguiente.titulo}: ${siguiente.descripcion}`
+      :"¡Desbloqueaste todos los logros disponibles! 🎉";
+  }
+
+  function dibujarTodo() {
+    dibujarFeed();
+    dibujarGrupo();
+    dibujarLogros();
+    actualizarGrupo();
+  }
+
+  // Pantalla inicial
+  function iniciarSplash() {
+    const splash=$("#splashScreen");
+    if (!splash) return;
+    setTimeout(()=>{
+      splash.classList.add("splash-hidden");
+      setTimeout(()=>splash.remove(),650);
+    },1750);
+  }
+
+  // Contador visual de actividad; es simulado, no representa usuarios reales.
+  function iniciarContador() {
+    const contador=$("#onlineCount");
+    if (!contador) return;
+    const opciones=[23,20,30,12,10,24,32,33,11,26,19,17,18,2,5,7,8,15,4,21,13];
+    function actualizar() {
+      const ahora=new Date();
+      const clave=ahora.getFullYear()*1000000+(ahora.getMonth()+1)*10000+ahora.getDate()*100+ahora.getHours();
+      contador.textContent=opciones[Math.abs(Math.floor(clave*9301+49297)%opciones.length)];
+    }
+    actualizar();
+    setInterval(actualizar,30000);
+  }
+
+  // Arranque
+  async function iniciar() {
+    cargarLocal();
+    iniciarSplash();
+    dibujarEscuelas();
+    dibujarGrupo();
+    dibujarLogros();
+    actualizarGrupo();
+    iniciarContador();
+
+    try {
+      await conectar();
+      await cargarRemoto(true);
+      setInterval(()=>cargarRemoto(false),15000);
+    } catch (error) {
+      console.error(error);
+      avisar("No se pudo conectar a Supabase. Revisá la configuración.");
+    }
+  }
+
+  if (document.readyState==="loading") {
+    document.addEventListener("DOMContentLoaded",iniciar,{once:true});
+  } else {
+    iniciar();
+  }
+})();
