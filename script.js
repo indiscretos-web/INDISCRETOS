@@ -916,7 +916,15 @@ $("#postImage")?.addEventListener("change", ev => {
     try {
       await conectar();
       await cargarRemoto(true);
-      setInterval(()=>cargarRemoto(false),15000);
+      // No redibujar el muro mientras alguien está escribiendo un comentario o respuesta:
+      // el refresco reemplaza el DOM y podría borrar el borrador.
+      setInterval(()=>{
+        const camposComentario = [...document.querySelectorAll(".comment-form textarea")];
+        const escribiendoComentario = camposComentario.some(campo =>
+          campo === document.activeElement || campo.value.length > 0
+        );
+        if (!escribiendoComentario) cargarRemoto(false);
+      },15000);
     } catch (error) {
       console.error(error);
       avisar("No se pudo conectar a Supabase. Revisá la configuración.");
