@@ -158,12 +158,20 @@
       const remotos = respuesta.data || [];
       const ids = remotos.map(p=>p.id);
       let likes = [];
+      let comentarios = [];
 
       if (ids.length) {
         const lr = await db.from("post_likes")
           .select("post_id,user_id").in("post_id",ids);
         if (lr.error) throw lr.error;
         likes = lr.data || [];
+
+        const cr = await db.from("post_comments")
+          .select("id,post_id,user_id,content,created_at")
+          .in("post_id",ids)
+          .order("created_at",{ascending:true});
+        if (cr.error) throw cr.error;
+        comentarios = cr.data || [];
       }
 
       datos.posts = remotos.map(p=>{
@@ -183,6 +191,7 @@
           foto:p.image_url || "",
           likes:likesPost.length,
           liked:likesPost.some(l=>l.user_id===usuario.id),
+          comentarios:comentarios.filter(c=>Number(c.post_id)===Number(p.id)),
           creado:p.created_at
         };
       });
@@ -203,6 +212,21 @@
       content:JSON.stringify({texto}),
       image_url:foto || null,
       school_id:grupoId || null
+    });
+    if (r.error) throw r.error;
+    await cargarRemoto();
+  }
+
+  async function agregarComentario(postId, texto) {
+    await conectar();
+    const contenido = String(texto || "").trim();
+    if (!contenido) throw new Error("El comentario está vacío.");
+    if (contenido.length > 500) throw new Error("El comentario supera los 500 caracteres.");
+
+    const r = await db.from("post_comments").insert({
+      post_id:postId,
+      user_id:usuario.id,
+      content:contenido
     });
     if (r.error) throw r.error;
     await cargarRemoto();
@@ -531,6 +555,71 @@ $("#postImage")?.addEventListener("change", ev => {
     });
     acciones.append(like,reportar);
     articulo.append(acciones);
+
+    const zonaComentarios=document.createElement("section");
+    zonaComentarios.className="comments-area";
+    const tituloComentarios=document.createElement("h4");
+    tituloComentarios.className="comments-title";
+    tituloComentarios.textContent=`💬 Comentarios (${(post.comentarios || []).length})`;
+    zonaComentarios.append(tituloComentarios);
+
+    const listaComentarios=document.createElement("div");
+    listaComentarios.className="comments-list";
+    const comentariosPost=post.comentarios || [];
+    if (!comentariosPost.length) {
+      const vacio=document.createElement("p");
+      vacio.className="comments-empty";
+      vacio.textContent="Todavía no hay comentarios. ¡Sé el primero!";
+      listaComentarios.append(vacio);
+    } else {
+      comentariosPost.forEach(c=>{
+        const item=document.createElement("article");
+        item.className="comment-item";
+        const autorComentario=document.createElement("strong");
+        autorComentario.textContent="🎭 Anónimo";
+        const textoComentario=document.createElement("p");
+        textoComentario.textContent=c.content || "";
+        const fechaComentario=document.createElement("small");
+        fechaComentario.textContent=fechaBonita(c.created_at);
+        item.append(autorComentario,textoComentario,fechaComentario);
+        listaComentarios.append(item);
+      });
+    }
+    zonaComentarios.append(listaComentarios);
+
+    const formularioComentario=document.createElement("form");
+    formularioComentario.className="comment-form";
+    const entradaComentario=document.createElement("textarea");
+    entradaComentario.name="comentario";
+    entradaComentario.maxLength=500;
+    entradaComentario.rows=2;
+    entradaComentario.placeholder="Escribí un comentario (máx. 500 caracteres)...";
+    entradaComentario.setAttribute("aria-label","Escribir comentario");
+    entradaComentario.required=true;
+    const botonComentario=document.createElement("button");
+    botonComentario.type="submit";
+    botonComentario.className="secondary-btn comment-submit";
+    botonComentario.textContent="Enviar comentario";
+    formularioComentario.append(entradaComentario,botonComentario);
+    formularioComentario.addEventListener("submit",async ev=>{
+      ev.preventDefault();
+      const texto=entradaComentario.value.trim();
+      if (!texto) return;
+      botonComentario.disabled=true;
+      try {
+        await agregarComentario(post.id,texto);
+        sonido("publicar");
+        avisar("¡Comentario publicado de forma anónima! 💬");
+      } catch(error) {
+        console.error(error);
+        sonido("error");
+        avisar("No se pudo guardar el comentario. Revisá la tabla y las políticas de Supabase.");
+      } finally {
+        botonComentario.disabled=false;
+      }
+    });
+    zonaComentarios.append(formularioComentario);
+    articulo.append(zonaComentarios);
     return articulo;
   }
 
