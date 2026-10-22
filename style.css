@@ -718,10 +718,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   resize: vertical;
 }
 
-/* El encabezado muestra únicamente la imagen que ya tenías. */
-.topbar .brand-text,
-.topbar .header-message { display: none !important; }
-
+/* Mantener visible el título y el mensaje del encabezado en escritorio. */
 .topbar .brand { width: 100%; }
 
 .mobile-menu-row { display: none; }
