@@ -269,9 +269,14 @@
     const e=escuelaPorId(datos.grupoId);
     $("#myGroup").textContent=e ? `🏫 ${e.nombre}` : "Todavía no elegiste un grupo.";
     $("#groupNotice")?.classList.toggle("hidden",Boolean(e));
-    $("#postText").disabled=false;
-    $("#postImage").disabled=false;
-    $("#publishBtn").disabled=false;
+    $("#postText").disabled=!e;
+    $("#postImage").disabled=!e;
+    $("#publishBtn").disabled=!e;
+    if ($("#postText")) {
+      $("#postText").placeholder=e
+        ? "Escribí algo para compartir con toda la comunidad..."
+        : "Primero entrá a un colegio para poder publicar...";
+    }
     dibujarFeed();
   }
 
@@ -392,6 +397,12 @@ $("#postImage")?.addEventListener("change", ev => {
 
   $("#postForm")?.addEventListener("submit",async ev=>{
     ev.preventDefault();
+    if (!tieneGrupo()) {
+      sonido("error");
+      avisar("Primero entrá a un colegio para poder publicar.");
+      cambiarVista("colegios");
+      return;
+    }
     const titulo=$("#postTitle").value.trim();
     const texto=$("#postText").value.trim();
 
@@ -405,7 +416,7 @@ $("#postImage")?.addEventListener("change", ev => {
 
     $("#publishBtn").disabled=true;
     try {
-      await publicarRemoto({titulo,texto,foto:fotoSeleccionada});
+      await publicarRemoto({titulo,texto,foto:fotoSeleccionada,grupoId:datos.grupoId});
       $("#postTitle").value="";
       $("#postText").value="";
       $("#charCount").textContent="0/1000";
