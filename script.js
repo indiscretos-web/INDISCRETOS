@@ -181,7 +181,7 @@
         } catch (_) {
           contenido = { texto:p.content || "" };
         }
-        const likesPost = likes.filter(l=>Number(l.post_id)===Number(p.id));
+        const likesPost = likes.filter(l=>String(l.post_id)===String(p.id));
         return {
           id:p.id,
           autorId:p.user_id || null,
@@ -192,7 +192,7 @@
           foto:p.image_url || "",
           likes:likesPost.length,
           liked:likesPost.some(l=>l.user_id===usuario.id),
-          comentarios:comentarios.filter(c=>Number(c.post_id)===Number(p.id)),
+          comentarios:comentarios.filter(c=>String(c.post_id)===String(p.id)),
           creado:p.created_at
         };
       });
