@@ -1078,6 +1078,7 @@ $("#postImage")?.addEventListener("change", ev => {
   let chatRefreshTimer = null;
   const CHAT_TTL_MS = 60 * 60 * 1000;
   const chatsGuardados = [];
+  let chatInboxTimer = null;
   const chatLocalKey = () => "indiscretos_chats_v1_" + (usuario?.id || "sin-cuenta");
   const mensajesLocalKey = id => "indiscretos_mensajes_v1_" + (usuario?.id || "sin-cuenta") + "_" + id;
 
@@ -1135,6 +1136,47 @@ $("#postImage")?.addEventListener("change", ev => {
       cont.append(fila);
     });
   }
+  async function sincronizarChatsEntrantes() {
+    if (!usuario || !db) return;
+    try {
+      const corte = new Date(Date.now() - CHAT_TTL_MS).toISOString();
+      const recibidos = await db.from("direct_messages")
+        .select("sender_id,recipient_id,created_at")
+        .or("sender_id.eq." + usuario.id + ",recipient_id.eq." + usuario.id)
+        .gte("created_at", corte)
+        .order("created_at", {ascending:false})
+        .limit(100);
+      if (recibidos.error) throw recibidos.error;
+
+      const otrosIds = [...new Set((recibidos.data || []).map(m =>
+        m.sender_id === usuario.id ? m.recipient_id : m.sender_id
+      ).filter(Boolean).filter(id => id !== usuario.id))];
+      if (!otrosIds.length) return;
+
+      const perfiles = await db.from("chat_profiles").select("user_id,alias").in("user_id", otrosIds);
+      if (perfiles.error) throw perfiles.error;
+      let cambio = false;
+      (perfiles.data || []).forEach(perfil => {
+        let chat = buscarChatGuardado(perfil.user_id);
+        if (!chat) {
+          chat = { userId: perfil.user_id, alias: perfil.alias, title: perfil.alias };
+          chatsGuardados.unshift(chat);
+          cambio = true;
+        } else if (chat.alias !== perfil.alias) {
+          chat.alias = perfil.alias;
+          if (!chat.title || chat.title === chat.alias) chat.title = perfil.alias;
+          cambio = true;
+        }
+      });
+      if (cambio) {
+        guardarChatsGuardados();
+        dibujarChatsGuardados();
+      }
+    } catch (error) {
+      console.warn("No se pudieron revisar los mensajes recibidos:", error);
+    }
+  }
+
   function dibujarResultadosAlias(perfiles) {
     const cont = $("#chatSearchResults");
     if (!cont) return;
@@ -1177,8 +1219,14 @@ $("#postImage")?.addEventListener("change", ev => {
         chatAliasActual = r.data.alias;
         $("#chatOwnAlias").textContent = chatAliasActual;
         mostrarAliasSetup(false);
+        await sincronizarChatsEntrantes();
         dibujarChatsGuardados();
+        if (chatInboxTimer) clearInterval(chatInboxTimer);
+        chatInboxTimer = setInterval(() => {
+          if (!document.hidden) sincronizarChatsEntrantes();
+        }, 10000);
       } else {
+        if (chatInboxTimer) clearInterval(chatInboxTimer);
         mostrarAliasSetup(true);
       }
     } catch (error) {
