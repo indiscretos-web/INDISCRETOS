@@ -174,14 +174,21 @@
         let identidadAnterior = false;
         try { identidadAnterior = localStorage.getItem("indiscretos_auth_identity_seen") === "1"; } catch (_) {}
         if (identidadAnterior) {
-          throw new Error("No encontramos la sesión anterior de este navegador. Para no crearte otra cuenta y separar tus mensajes, no generamos una identidad nueva automáticamente. Recargá una vez; si sigue igual, no borres los datos del navegador y avisame.");
+          // No reemplazar una identidad perdida por otra. Dejar que la página cargue
+          // y permitir que el usuario recupere su cuenta desde el panel de acceso.
+          usuario = null;
+          return;
         }
         const resultado = await db.auth.signInAnonymously();
         if (resultado.error) throw resultado.error;
         usuario = resultado.data.user;
         try { localStorage.setItem("indiscretos_auth_identity_seen", "1"); } catch (_) {}
       }
-      if (!usuario?.id) throw new Error("Supabase no devolvió un usuario válido.");
+      if (!usuario?.id) {
+        // La página puede abrir sin sesión para que el usuario pueda iniciar sesión
+        // con su alias y contraseña; no crear identidades nuevas como alternativa.
+        return;
+      }
     })();
 
     try {
