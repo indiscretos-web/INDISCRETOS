@@ -1429,20 +1429,45 @@ $("#postImage")?.addEventListener("change", ev => {
     try {
       await conectar();
 
-      // Leer el usuario autenticado directamente del cliente que realiza el INSERT.
-      // Evita enviar un sender_id viejo si la sesión anónima se renovó o cambió.
-      const authActual = await db.auth.getUser();
-      if (authActual.error) throw authActual.error;
-      const remitente = authActual.data?.user;
-      if (!remitente?.id) throw new Error("No hay una sesión activa. Recargá la página e intentá de nuevo.");
+      // Recuperar la sesión desde el mismo cliente usado para las consultas.
+      // Si expiró o se perdió, crear una sesión anónima nueva.
+      let sesionActual = await db.auth.getSession();
+      if (sesionActual.error) throw sesionActual.error;
+      if (!sesionActual.data?.session?.user?.id) {
+        const nuevaSesion = await db.auth.signInAnonymously();
+        if (nuevaSesion.error) throw nuevaSesion.error;
+        sesionActual = await db.auth.getSession();
+        if (sesionActual.error) throw sesionActual.error;
+      }
+      const remitente = sesionActual.data?.session?.user;
+      if (!remitente?.id) throw new Error("Supabase no pudo iniciar una sesión anónima. Recargá la página e intentá de nuevo.");
       usuario = remitente;
 
-      // Verificar que el remitente tenga perfil propio; la tabla de mensajes
-      // exige que exista chat_profiles para sender_id y que coincida con auth.uid().
-      const perfilRemitente = await db.from("chat_profiles")
-        .select("user_id").eq("user_id", remitente.id).maybeSingle();
+      // Comprobar que exista el perfil vinculado al usuario actual.
+      let perfilRemitente = await db.from("chat_profiles")
+        .select("user_id,alias").eq("user_id", remitente.id).maybeSingle();
       if (perfilRemitente.error) throw perfilRemitente.error;
-      if (!perfilRemitente.data) throw new Error("Tu alias no está registrado en esta sesión. Entrá a Mensajes privados y configurá tu alias nuevamente.");
+      if (!perfilRemitente.data) {
+        // Crear un alias automático si la sesión cambió y el perfil anterior ya no corresponde.
+        const caracteres = "abcdefghjkmnpqrstuvwxyz23456789";
+        let creado = null;
+        let errorPerfil = null;
+        for (let intento = 0; intento < 8 && !creado; intento++) {
+          let aliasNuevo = "chat";
+          for (let i = 0; i < 4; i++) aliasNuevo += caracteres[Math.floor(Math.random() * caracteres.length)];
+          const alta = await db.from("chat_profiles")
+            .insert({user_id:remitente.id, alias:aliasNuevo})
+            .select("user_id,alias").single();
+          if (!alta.error) creado = alta.data;
+          else {
+            errorPerfil = alta.error;
+            if (alta.error.code !== "23505") break;
+          }
+        }
+        if (!creado) throw errorPerfil || new Error("No se pudo crear el perfil para esta sesión.");
+        chatAliasActual = creado.alias;
+        if ($("#chatOwnAlias")) $("#chatOwnAlias").textContent = chatAliasActual;
+      }
 
       const r = await db.from("direct_messages")
         .insert({sender_id:remitente.id, recipient_id:chat.userId, content:texto})
