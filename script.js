@@ -1302,6 +1302,20 @@ $("#postImage")?.addEventListener("change", ev => {
     }
   }
 
+  // Actualizar el contador al volver a la ventana o pestaña en escritorio.
+  let ultimaRefrescadaBandeja = 0;
+  async function refrescarContadorAlVolver() {
+    if (document.hidden || !usuario || !db) return;
+    const ahora = Date.now();
+    if (ahora - ultimaRefrescadaBandeja < 1500) return;
+    ultimaRefrescadaBandeja = ahora;
+    await sincronizarChatsEntrantes();
+  }
+  window.addEventListener("focus", refrescarContadorAlVolver);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refrescarContadorAlVolver();
+  });
+
   async function iniciarMensajesPrivados() {
     try {
       await conectar();
