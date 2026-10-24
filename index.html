@@ -22,7 +22,11 @@
   <div class="layout">
     <nav class="sidebar" id="sidebar" aria-label="Navegación principal">
       <button class="nav-btn active" data-view="inicio">📰 Feed</button>
-      <button class="nav-btn" data-view="colegios">🏫 Elegir colegio</button>
+      <button class="nav-btn" data-view="colegios">🏫 Colegios</button>
+      <div class="joined-school-nav hidden" id="joinedSchoolNav">
+        <button class="nav-btn" id="joinedSchoolNavButton" data-view="grupo">🏫 Mi colegio</button>
+        <button class="nav-leave-btn" id="navLeaveGroupBtn" type="button">Salir</button>
+      </div>
       <button class="nav-btn" data-view="logros">🏆 Logros</button>
     </nav>
 

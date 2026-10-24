@@ -345,6 +345,10 @@
   function actualizarGrupo() {
     const e=escuelaPorId(datos.grupoId);
     $("#myGroup").textContent=e ? `🏫 ${e.nombre}` : "Todavía no elegiste un grupo.";
+    const navColegio=$("#joinedSchoolNav");
+    const navNombre=$("#joinedSchoolNavButton");
+    if (navColegio) navColegio.classList.toggle("hidden",!e);
+    if (navNombre && e) navNombre.textContent="🏫 "+e.nombre;
     $("#groupNotice")?.classList.add("hidden");
     // El formulario permanece visible, pero cualquier intento sin colegio lleva a la selección.
     $("#postText").readOnly=!e;
@@ -404,6 +408,10 @@
   }
 
   $("#changeGroupBtn")?.addEventListener("click",()=>salirGrupo(true));
+  $("#navLeaveGroupBtn")?.addEventListener("click",()=>{
+    sonido("salir");
+    salirGrupo(true);
+  });
 
   function dibujarEscuelas(filtro = $("#schoolSearch")?.value || "") {
     const lista=$("#schoolList");
