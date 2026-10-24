@@ -1664,7 +1664,9 @@ $("#postImage")?.addEventListener("change", ev => {
     await actualizarMensajesChat();
     if (chatRefreshTimer) clearInterval(chatRefreshTimer);
     chatRefreshTimer = setInterval(() => {
-      if (chatActivoId === userId && !document.hidden && !$("#chatMessageInput").value) actualizarMensajesChat();
+      const mensajesVisible = $("#view-mensajes") && !$("#view-mensajes").classList.contains("hidden");
+      const salaVisible = $("#chatRoom") && !$("#chatRoom").classList.contains("hidden");
+      if (chatActivoId === userId && mensajesVisible && salaVisible && !document.hidden && !$("#chatMessageInput").value) actualizarMensajesChat();
     }, 10000);
   }
   async function actualizarMensajesChat() {
@@ -1685,7 +1687,12 @@ $("#postImage")?.addEventListener("change", ev => {
       const ultimoRecibido = mensajes
         .filter(m => m.sender_id === chat.userId && m.recipient_id === usuario.id)
         .reduce((ultimo, m) => Math.max(ultimo, Date.parse(m.created_at) || 0), 0);
-      if (ultimoRecibido > 0) marcarChatLeido(chat.userId, ultimoRecibido);
+      // Solo marcar como leído si la conversación realmente está a la vista.
+      const mensajesVisible = $("#view-mensajes") && !$("#view-mensajes").classList.contains("hidden");
+      const salaVisible = $("#chatRoom") && !$("#chatRoom").classList.contains("hidden");
+      if (ultimoRecibido > 0 && mensajesVisible && salaVisible && !document.hidden) {
+        marcarChatLeido(chat.userId, ultimoRecibido);
+      }
       cont.replaceChildren();
       if (!mensajes.length) {
         cont.innerHTML = '<p class="tiny-note">Todavía no hay mensajes. ¡Mandá el primero!</p>';
@@ -1875,7 +1882,11 @@ $("#postImage")?.addEventListener("change", ev => {
   async function refrescarMensajesAlVolver() {
     if (document.hidden || !db || !usuario) return;
     await sincronizarChatsEntrantes();
-    if (chatActivoId && !$("#chatMessageInput")?.value) await actualizarMensajesChat();
+    const mensajesVisible = $("#view-mensajes") && !$("#view-mensajes").classList.contains("hidden");
+    const salaVisible = $("#chatRoom") && !$("#chatRoom").classList.contains("hidden");
+    if (chatActivoId && mensajesVisible && salaVisible && !$("#chatMessageInput")?.value) {
+      await actualizarMensajesChat();
+    }
   }
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refrescarMensajesAlVolver();
