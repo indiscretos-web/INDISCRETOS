@@ -1312,11 +1312,11 @@ $("#postImage")?.addEventListener("change", ev => {
       const usuarioActual = sesion.data?.session?.user;
       if (!usuarioActual?.id) return;
       usuario = usuarioActual;
-      if (usuario.is_anonymous) return;
+      // Las sesiones anónimas también pueden refrescar su propia bandeja.
       await sincronizarChatsEntrantes();
       const mensajesVisible = $("#view-mensajes") && !$("#view-mensajes").classList.contains("hidden");
       const salaVisible = $("#chatRoom") && !$("#chatRoom").classList.contains("hidden");
-      if (chatActivoId && mensajesVisible && salaVisible && !$("#chatMessageInput")?.value) {
+      if (chatActivoId && mensajesVisible && salaVisible) {
         await actualizarMensajesChat();
       }
     } catch (error) {
@@ -1417,7 +1417,7 @@ $("#postImage")?.addEventListener("change", ev => {
   }
 
   function iniciarAvisosNuevosMensajes() {
-    if (!db || !usuario?.id || usuario.is_anonymous) return;
+    if (!db || !usuario?.id) return;
     if (chatInboxRealtime) {
       try { db.removeChannel(chatInboxRealtime); } catch (_) {}
       chatInboxRealtime = null;
@@ -1770,8 +1770,9 @@ $("#postImage")?.addEventListener("change", ev => {
     chatRefreshTimer = setInterval(() => {
       const mensajesVisible = $("#view-mensajes") && !$("#view-mensajes").classList.contains("hidden");
       const salaVisible = $("#chatRoom") && !$("#chatRoom").classList.contains("hidden");
-      if (chatActivoId === userId && mensajesVisible && salaVisible && !document.hidden && !$("#chatMessageInput").value) actualizarMensajesChat();
-    }, 10000);
+      // Refrescar aunque el usuario esté escribiendo; actualizarMensajesChat no modifica el borrador.
+      if (chatActivoId === userId && mensajesVisible && salaVisible && !document.hidden) actualizarMensajesChat();
+    }, 3000);
   }
   async function actualizarMensajesChat() {
     const chat = buscarChatGuardado(chatActivoId);
