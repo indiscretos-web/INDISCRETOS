@@ -93,8 +93,9 @@
     return escuelas.find(e=>e.id===id);
   }
 
+  // Indiscretos funciona con un único Feed general; no requiere colegios ni grupos.
   function tieneGrupo() {
-    return Boolean(escuelaPorId(datos.grupoId));
+    return true;
   }
 
   function guardarLocal() {
@@ -209,8 +210,8 @@
         return {
           id:p.id,
           autorId:p.user_id || null,
-          grupoId:p.school_id || null,
-          tipo:p.school_id ? "grupo" : "publico",
+          grupoId:null,
+          tipo:"publico",
           titulo:p.title || contenido.titulo || "",
           texto:contenido.texto ?? p.content ?? "",
           foto:p.image_url || "",
@@ -243,7 +244,7 @@
       title:titulo,
       content:JSON.stringify({texto}),
       image_url:foto || null,
-      school_id:grupoId || null
+      school_id:null
     });
     if (r.error) throw r.error;
     await cargarRemoto();
@@ -351,16 +352,12 @@
     if (navColegio) navColegio.classList.toggle("hidden",!e);
     if (navNombre && e) navNombre.textContent="🏫 "+e.nombre;
     $("#groupNotice")?.classList.add("hidden");
-    // El formulario permanece visible, pero cualquier intento sin colegio lleva a la selección.
-    $("#postText").readOnly=!e;
-    $("#postImage").disabled=!e;
+    // El Feed es único y siempre permite publicar sin seleccionar un colegio.
+    $("#postText").readOnly=false;
+    $("#postImage").disabled=false;
     $("#publishBtn").disabled=false;
-    if ($("#postText")) {
-      $("#postText").placeholder=e
-        ? "Escribí algo para compartir con toda la comunidad..."
-        : "Unite a un colegio para interactuar en Indiscretos.";
-    }
-    $("#postForm")?.classList.toggle("needs-school",!e);
+    if ($("#postText")) $("#postText").placeholder="Escribí lo que quieras compartir con todos...";
+    $("#postForm")?.classList.remove("needs-school");
     dibujarFeed();
   }
 
@@ -527,10 +524,6 @@ $("#postImage")?.addEventListener("change", ev => {
 
   $("#postForm")?.addEventListener("submit",async ev=>{
     ev.preventDefault();
-    if (!tieneGrupo()) {
-      pedirColegio();
-      return;
-    }
     const titulo=$("#postTitle").value.trim();
     const texto=$("#postText").value.trim();
 
@@ -544,7 +537,7 @@ $("#postImage")?.addEventListener("change", ev => {
 
     $("#publishBtn").disabled=true;
     try {
-      await publicarRemoto({titulo,texto,foto:fotoSeleccionada,grupoId:datos.grupoId});
+      await publicarRemoto({titulo,texto,foto:fotoSeleccionada,grupoId:null});
       $("#postTitle").value="";
       $("#postText").value="";
       $("#charCount").textContent="0/1000";
@@ -708,7 +701,7 @@ $("#postImage")?.addEventListener("change", ev => {
     fecha.textContent=fechaBonita(post.creado);
     const etiqueta=document.createElement("div");
     etiqueta.className="school-tag";
-    etiqueta.textContent=post.tipo==="grupo"&&e?`🌎 Feed · 🏫 ${e.nombre}`:"🌎 Publicación pública";
+    etiqueta.textContent="🌎 Publicación pública";
     identidad.append(autor,fecha,etiqueta);
     cabecera.append(avatar,identidad);
     articulo.append(cabecera);
@@ -928,7 +921,6 @@ $("#postImage")?.addEventListener("change", ev => {
 
   function dibujarTodo() {
     dibujarFeed();
-    dibujarGrupo();
     dibujarLogros();
     actualizarGrupo();
   }
@@ -966,8 +958,6 @@ $("#postImage")?.addEventListener("change", ev => {
       guardarLocal();
     }
     iniciarSplash();
-    dibujarEscuelas();
-    dibujarGrupo();
     dibujarLogros();
     actualizarGrupo();
     iniciarContador();
@@ -980,7 +970,7 @@ $("#postImage")?.addEventListener("change", ev => {
       setInterval(()=>{
         // Evita peticiones y repintados si la pestaña no se ve o alguien está escribiendo.
         if (document.hidden) return;
-        const camposEditables = [...document.querySelectorAll(".comment-form textarea, #postText, #postTitle, .group-composer textarea, .group-composer input")];
+        const camposEditables = [...document.querySelectorAll(".comment-form textarea, #postText, #postTitle")];
         const editando = camposEditables.some(campo =>
           campo === document.activeElement || campo.value.length > 0
         );

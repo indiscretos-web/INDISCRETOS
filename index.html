@@ -22,11 +22,6 @@
   <div class="layout">
     <nav class="sidebar" id="sidebar" aria-label="Navegación principal">
       <button class="nav-btn active" data-view="inicio">📰 Feed</button>
-      <button class="nav-btn" data-view="colegios">🏫 Colegios</button>
-      <div class="joined-school-nav hidden" id="joinedSchoolNav">
-        <button class="nav-btn" id="joinedSchoolNavButton" data-view="grupo">🏫 Mi colegio</button>
-        <button class="nav-leave-btn" id="navLeaveGroupBtn" type="button">Salir</button>
-      </div>
       <button class="nav-btn" data-view="logros">🏆 Logros</button>
     </nav>
 
@@ -42,8 +37,7 @@
         </div>
 
         <div class="notice">
-          <strong>Feed general:</strong> acá aparecen las publicaciones de toda la comunidad.
-          Si publicás desde tu colegio, el mensaje también se muestra en el muro de <strong>Mi colegio</strong>.
+          <strong>Feed:</strong> todas las publicaciones aparecen acá y están disponibles para toda la comunidad.
         </div>
 
         <section class="card">
@@ -56,7 +50,6 @@
           </div>
 
           <form id="postForm">
-            <p class="tiny-note hidden" id="groupNotice">🔒 Uní tu colegio para poder publicar.</p>
             <label class="sr-only" for="postText">Tu mensaje</label>
             <textarea id="postText" maxlength="1000" placeholder="Escribí lo que quieras compartir con todos..." rows="4"></textarea>
 
@@ -78,45 +71,11 @@
         <div class="feed-heading">
           <div>
             <h2>Feed</h2>
-            <p>Publicaciones compartidas por la comunidad y mensajes de los colegios.</p>
+            <p>Publicaciones compartidas por toda la comunidad.</p>
           </div>
           <span class="live-dot">● MURO</span>
         </div>
         <div class="feed" id="feed"></div>
-      </section>
-
-      <!-- COLEGIOS -->
-      <section class="view hidden" id="view-colegios">
-        <div class="page-heading">
-          <span class="eyebrow">ENCONTRÁ TU COMUNIDAD</span>
-          <h2>🏫 Colegios</h2>
-          <p>Elegí tu colegio para participar en Indiscretos.</p>
-          <div class="notice hidden" id="schoolJoinNotice" role="status" aria-live="polite">Unite a un colegio para interactuar en Indiscretos.</div>
-        </div>
-        <div class="card school-search">
-          <label for="schoolSearch">Buscá tu colegio</label>
-          <input type="search" id="schoolSearch" placeholder="Nombre o dirección...">
-        </div>
-        <div class="school-list" id="schoolList"></div>
-      </section>
-
-      <!-- MI GRUPO -->
-      <section class="view hidden" id="view-grupo">
-        <div class="page-heading">
-          <span class="eyebrow">TU ESPACIO DE COLEGIO</span>
-          <h2>🔒 Mi grupo</h2>
-          <p>Este muro muestra únicamente las publicaciones del colegio al que entraste.</p>
-        </div>
-        <button class="secondary-btn hidden" id="changeGroupBtn" type="button">Salir de mi grupo</button>
-        <section class="card group-details" id="groupDetails"></section>
-        <div class="feed-heading">
-          <div>
-            <h2>💬 Muro de mi colegio</h2>
-            <p>Los mensajes de este grupo también aparecen en el Feed general.</p>
-          </div>
-          <span class="live-dot">● MI GRUPO</span>
-        </div>
-        <div class="feed" id="groupFeed"></div>
       </section>
 
       <!-- LOGROS -->
