@@ -1286,6 +1286,7 @@ $("#postImage")?.addEventListener("change", ev => {
     chatAliasActual = perfil.alias;
     $("#chatOwnAlias").textContent = chatAliasActual;
     $("#chatAccountAlias").value = chatAliasActual;
+    actualizarBotonCambiarAlias();
     $("#chatAccountPassword").value = "";
     $("#chatAccountStatus").textContent = "Sesión iniciada como @" + chatAliasActual + ". Tus mensajes se sincronizan con esta cuenta.";
     $("#chatAccountPanel")?.classList.add("hidden");
@@ -1418,73 +1419,149 @@ $("#postImage")?.addEventListener("change", ev => {
 
   $("#chatAliasForm")?.addEventListener("submit", async ev => {
     ev.preventDefault();
-    const alias = $("#chatAliasInput").value.trim();
-    const aliasNormalizado = normalizar(alias);
-    const nombresPersonales = ["ana","anabel","andrea","angela","angeles","antonia","antonio","ariel","azul","beatriz","belen","benjamin","brenda","bruno","camila","carla","carlos","catalina","ceci","cecilia","celeste","cesar","clara","claudia","daniel","daniela","david","diego","dolores","eduardo","elena","emilia","emiliano","emma","enrique","eric","ernesto","esteban","evelyn","fabian","facundo","felipe","fernanda","fernando","florencia","francisco","franco","gabriel","gabriela","gael","genesis","gerardo","gisela","gloria","graciela","guadalupe","guillermo","gustavo","hector","hernan","ignacio","ines","irene","isabel","ivan","jacinto","jaime","javier","jazmin","jesica","joaquin","jorge","jose","juan","julia","julian","julio","karen","karina","kevin","laura","lautaro","leandro","leo","leonardo","lilia","liliana","lola","lorena","lucas","lucia","luciana","luciano","luisa","luis","luz","magali","manuel","marcela","marco","maria","mariana","mariano","marina","mario","martin","mateo","matias","mauricio","melina","melissa","micaela","miguel","milagros","mirta","monica","nahuel","natalia","nicolas","nicole","noelia","norma","octavio","olga","oscar","pablo","paloma","pamela","paola","patricia","paula","pedro","pili","pilar","ramiro","raul","renata","ricardo","rocio","rodrigo","rosa","roxana","sabrina","samuel","sandra","santino","santiago","sara","sebastian","sergio","silvia","sofia","sol","tamara","tatiana","thiago","tomas","valentina","valeria","vanesa","veronica","vicente","victoria","violeta","viviana","ximena","yanina","yolanda","zoe"];
-    if (!/^[A-Za-z0-9_]{3,8}$/.test(alias)) {
-      $("#chatAliasStatus").textContent = "Usá de 3 a 8 caracteres, sin espacios: solo letras, números o guion bajo.";
+    const aliasNuevo = $("#chatAliasInput").value.trim();
+    const status = $("#chatAliasStatus");
+    const boton = $("#chatAliasForm button[type=submit]");
+    if (!validarAliasCuenta(aliasNuevo)) {
+      status.textContent = "Usá entre 3 y 8 caracteres: letras, números o guion bajo.";
       return;
     }
-    if (nombresPersonales.includes(aliasNormalizado)) {
-      $("#chatAliasStatus").textContent = "Ese alias parece un nombre de persona. Elegí uno inventado, sin nombres propios.";
+    if (usuario?.is_anonymous !== false) {
+      status.textContent = "Iniciá sesión con tu cuenta para cambiar el alias.";
       return;
     }
-    const boton = ev.submitter || $("#chatAliasForm button[type=submit]");
+    const restante = aliasDisponibleDesde() - Date.now();
+    if (restante > 0) {
+      const minutos = Math.ceil(restante / 60000);
+      status.textContent = "Por seguridad, solo podés cambiarlo cada 3 horas. Esperá " + Math.floor(minutos / 60) + " h " + (minutos % 60) + " min.";
+      return;
+    }
+    if (aliasNuevo.toLowerCase() === String(chatAliasActual).toLowerCase()) {
+      mostrarAliasSetup(false);
+      return;
+    }
     boton.disabled = true;
     try {
       await conectar();
-      const existente = await db.from("chat_profiles").select("user_id").ilike("alias", alias).maybeSingle();
-      if (existente.error) throw existente.error;
-      if (existente.data && existente.data.user_id !== usuario.id) {
-        $("#chatAliasStatus").textContent = "Ese alias ya está ocupado. Probá con otro.";
-        return;
+      const ocupado = await db.from("chat_profiles").select("user_id,alias").ilike("alias",aliasNuevo).maybeSingle();
+      if (ocupado.error) throw ocupado.error;
+      if (ocupado.data && ocupado.data.user_id !== usuario.id) throw new Error("Ese alias ya está ocupado. Elegí otro.");
+      const cambioAuth = await db.auth.updateUser({
+        email:correoDeAlias(aliasNuevo),
+        data:{...(usuario.user_metadata || {}), alias:aliasNuevo, alias_changed_at:Date.now()}
+      });
+      if (cambioAuth.error) throw cambioAuth.error;
+      const cambioPerfil = await db.from("chat_profiles").update({alias:aliasNuevo}).eq("user_id",usuario.id);
+      if (cambioPerfil.error) {
+        status.textContent = "Se actualizó la cuenta, pero no el perfil del alias. No cierres sesión; contactá al administrador.";
+        throw cambioPerfil.error;
       }
-      // Evitar upsert: separar alta y modificación para que los errores de RLS sean claros.
-      const perfilPropio = await db.from("chat_profiles")
-        .select("user_id,alias").eq("user_id", usuario.id).maybeSingle();
-      if (perfilPropio.error) throw perfilPropio.error;
-
-      let guardado;
-      if (perfilPropio.data) {
-        guardado = await db.from("chat_profiles")
-          .update({alias}).eq("user_id", usuario.id)
-          .select("user_id,alias").single();
-      } else {
-        guardado = await db.from("chat_profiles")
-          .insert({user_id:usuario.id, alias})
-          .select("user_id,alias").single();
-      }
-      if (guardado.error) {
-        if (guardado.error.code === "23505") {
-          $("#chatAliasStatus").textContent = "Ese alias ya está ocupado. Probá con otro.";
-          return;
-        }
-        throw guardado.error;
-      }
-      if (!guardado.data || guardado.data.user_id !== usuario.id || guardado.data.alias !== alias) {
-        throw new Error("Supabase no confirmó el alias guardado.");
-      }
-      chatAliasActual = guardado.data.alias;
-      $("#chatOwnAlias").textContent = chatAliasActual;
-      $("#chatAliasStatus").textContent = "";
+      usuario = cambioAuth.data.user || usuario;
+      chatAliasActual = aliasNuevo;
+      $("#chatOwnAlias").textContent = aliasNuevo;
+      $("#chatAccountAlias").value = aliasNuevo;
+      $("#chatAccountStatus").textContent = "Tu cuenta es @" + aliasNuevo + ".";
       mostrarAliasSetup(false);
       leerChatsGuardados();
       dibujarChatsGuardados();
-      avisar("¡Alias guardado!");
+      actualizarBotonCambiarAlias();
+      avisar("Alias actualizado. Podrás cambiarlo de nuevo en 3 horas.");
     } catch (error) {
-      console.error("Error al guardar alias en Supabase:", error);
-      const codigo = error?.code ? " (" + error.code + ")" : "";
-      const detalle = error?.message || error?.details || "Error desconocido";
-      $("#chatAliasStatus").textContent = "No se pudo guardar" + codigo + ": " + detalle;
-    } finally { boton.disabled = false; }
+      console.error("Error al cambiar alias:",error);
+      status.textContent = error?.message || "No se pudo cambiar el alias.";
+    } finally {
+      boton.disabled = false;
+    }
   });
-  $("#chatChangeAlias")?.addEventListener("click", () => {
-    if (usuario && usuario.is_anonymous === false) {
-      avisar("Para no perder el acceso desde otros dispositivos, por ahora no cambies el alias de una cuenta con contraseña.");
+    const TRES_HORAS_MS = 3 * 60 * 60 * 1000;
+  const aliasDisponibleDesde = () => Number(usuario?.user_metadata?.alias_changed_at || 0) + TRES_HORAS_MS;
+  function actualizarBotonCambiarAlias() {
+    const boton = $("#chatChangeAlias");
+    if (!boton) return;
+    const restante = aliasDisponibleDesde() - Date.now();
+    boton.disabled = restante > 0;
+    if (restante > 0) {
+      const minutos = Math.ceil(restante / 60000);
+      boton.title = "Podés cambiarlo de nuevo en aproximadamente " + Math.floor(minutos / 60) + " h " + (minutos % 60) + " min.";
+    } else {
+      boton.title = "Podés cambiar tu alias.";
+    }
+  }
+  document.querySelectorAll("[data-toggle-password]").forEach(boton => {
+    boton.addEventListener("click", () => {
+      const campo = $("#" + boton.dataset.togglePassword);
+      if (!campo) return;
+      const visible = campo.type === "password";
+      campo.type = visible ? "text" : "password";
+      boton.textContent = visible ? "Ocultar" : "Ver";
+      boton.setAttribute("aria-pressed", String(visible));
+    });
+  });
+  $("#chatChangeAlias")?.addEventListener("click", async () => {
+    if (!usuario || usuario.is_anonymous !== false) {
+      avisar("Primero iniciá sesión con tu cuenta.");
+      return;
+    }
+    const restante = aliasDisponibleDesde() - Date.now();
+    if (restante > 0) {
+      const minutos = Math.ceil(restante / 60000);
+      avisar("Podés cambiar tu alias en " + Math.floor(minutos / 60) + " h " + (minutos % 60) + " min.");
+      actualizarBotonCambiarAlias();
       return;
     }
     $("#chatAliasInput").value = chatAliasActual;
     mostrarAliasSetup(true);
+    $("#chatAliasStatus").textContent = "El cambio de alias estará disponible una vez cada 3 horas.";
+  });
+  $("#chatTogglePasswordPanel")?.addEventListener("click", () => {
+    $("#chatPasswordPanel")?.classList.toggle("hidden");
+    if (!$("#chatPasswordPanel")?.classList.contains("hidden")) $("#chatCurrentPassword")?.focus();
+  });
+  $("#chatPasswordForm")?.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const actual = $("#chatCurrentPassword").value;
+    const nueva = $("#chatNewPassword").value;
+    const confirmar = $("#chatNewPasswordConfirm").value;
+    const status = $("#chatPasswordStatus");
+    const boton = $("#chatPasswordSaveBtn");
+    if (nueva.length < 8 || nueva.length > 72) {
+      status.textContent = "La nueva contraseña debe tener entre 8 y 72 caracteres.";
+      return;
+    }
+    if (nueva !== confirmar) {
+      status.textContent = "Las nuevas contraseñas no coinciden.";
+      return;
+    }
+    if (actual === nueva) {
+      status.textContent = "La nueva contraseña debe ser distinta de la actual.";
+      return;
+    }
+    boton.disabled = true;
+    status.textContent = "Verificando la contraseña actual…";
+    try {
+      await conectar();
+      const emailActual = usuario?.email || correoDeAlias(chatAliasActual);
+      const verificacion = await db.auth.signInWithPassword({email:emailActual,password:actual});
+      if (verificacion.error) throw new Error("La contraseña actual no es correcta.");
+      const cambio = await db.auth.updateUser({password:nueva});
+      if (cambio.error) throw cambio.error;
+      usuario = cambio.data.user || usuario;
+      $("#chatCurrentPassword").value = "";
+      $("#chatNewPassword").value = "";
+      $("#chatNewPasswordConfirm").value = "";
+      document.querySelectorAll("#chatPasswordForm [data-toggle-password]").forEach(b => {
+        const campo = $("#" + b.dataset.togglePassword);
+        if (campo) campo.type = "password";
+        b.textContent = "Ver";
+        b.setAttribute("aria-pressed","false");
+      });
+      status.textContent = "Contraseña actualizada correctamente.";
+    } catch (error) {
+      console.error("No se pudo cambiar la contraseña:",error);
+      status.textContent = error?.message || "No se pudo cambiar la contraseña.";
+    } finally {
+      boton.disabled = false;
+    }
   });
   $("#chatSearchForm")?.addEventListener("submit", async ev => {
     ev.preventDefault();
