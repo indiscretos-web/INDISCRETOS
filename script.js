@@ -1333,24 +1333,32 @@ $("#postImage")?.addEventListener("change", ev => {
   async function iniciarMensajesPrivados() {
     try {
       await conectar();
-      // La sesión de Auth es la fuente de verdad al volver a la sección.
-      // No confiar únicamente en la variable usuario, que puede quedar desactualizada.
+      // Recuperar la sesión real cada vez que se entra a Mensajes. No cambiar a una
+      // identidad anónima por una variable local que haya quedado desactualizada.
       const sesionActual = await db.auth.getSession();
       if (sesionActual.error) throw sesionActual.error;
-      usuario = sesionActual.data?.session?.user || usuario;
+      let usuarioActual = sesionActual.data?.session?.user || null;
+
+      // Si Supabase está terminando de restaurar el token, intentar una lectura directa
+      // antes de mostrar el formulario de inicio de sesión.
+      if (!usuarioActual?.id) {
+        const verificacion = await db.auth.getUser();
+        if (!verificacion.error && verificacion.data?.user?.id) usuarioActual = verificacion.data.user;
+      }
+      if (usuarioActual?.id) usuario = usuarioActual;
       if (!usuario?.id) throw new Error("No se pudo recuperar la sesión. Volvé a iniciar sesión.");
+
       const r = await db.from("chat_profiles").select("user_id,alias").eq("user_id", usuario.id).maybeSingle();
       if (r.error) throw r.error;
       leerChatsGuardados();
       const panel = $("#chatAccountPanel");
-      const permanente = usuario && usuario.is_anonymous === false;
+      const permanente = usuario.is_anonymous === false;
       if (r.data) {
         chatAliasActual = r.data.alias;
         $("#chatOwnAlias").textContent = chatAliasActual;
         if ($("#chatAccountAlias")) $("#chatAccountAlias").value = chatAliasActual;
       }
-      // Primero se crea/vincula una cuenta o se inicia sesión. No generar alias ni abrir chats
-      // automáticamente para visitantes anónimos.
+
       if (permanente && r.data) {
         panel?.classList.add("hidden");
         mostrarAliasSetup(false);
@@ -1363,6 +1371,10 @@ $("#postImage")?.addEventListener("change", ev => {
         $("#chatWorkspace")?.classList.add("hidden");
         $("#chatAliasSetup")?.classList.add("hidden");
         if (chatInboxTimer) clearInterval(chatInboxTimer);
+        if (chatInboxRealtime) {
+          try { db.removeChannel(chatInboxRealtime); } catch (_) {}
+          chatInboxRealtime = null;
+        }
       }
     } catch (error) {
       console.error("Mensajes privados:", error);
