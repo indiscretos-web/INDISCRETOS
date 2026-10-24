@@ -69,7 +69,7 @@ begin
   if not exists (select 1 from cron.job where jobname = 'indiscretos-delete-expired-messages') then
     perform cron.schedule(
       'indiscretos-delete-expired-messages',
-      '*/10 * * * *',
+      '* * * * *',
       $job$delete from public.direct_messages where created_at <= now() - interval '1 hour';$job$
     );
   end if;
