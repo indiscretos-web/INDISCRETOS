@@ -14,6 +14,7 @@
   let toastTimer;
   const comentariosAbiertos = new Set();
   let idsPublicacionesConocidas = null;
+  const publicacionesTruenoEscuchadas = new Set();
 
   const escuelas = [
     { id:"rivadavia", nombre:'Colegio N° 1 D.E. 3 "Bernardino Rivadavia"', direccion:"Av. San Juan 1545, Constitución, CABA", mapa:"Av. San Juan 1545, Constitución, Ciudad Autónoma de Buenos Aires, Argentina" },
@@ -242,7 +243,7 @@
       const idsActuales = new Set(datos.posts.map(p=>String(p.id)));
       if (idsPublicacionesConocidas !== null) {
         datos.posts.forEach(p=>{
-          if (!idsPublicacionesConocidas.has(String(p.id)) && p.poderTrueno) sonido("trueno");
+          if (!idsPublicacionesConocidas.has(String(p.id)) && p.poderTrueno) reproducirTruenoUnaVez(p.id);
         });
       }
       idsPublicacionesConocidas = idsActuales;
@@ -1027,6 +1028,30 @@ $("#postImage")?.addEventListener("change", ev => {
     setInterval(actualizar,30000);
   }
 
+  function reproducirTruenoUnaVez(id) {
+    const clave=String(id);
+    if (publicacionesTruenoEscuchadas.has(clave)) return;
+    publicacionesTruenoEscuchadas.add(clave);
+    sonido("trueno");
+  }
+
+  function escucharPublicacionesTrueno() {
+    if (!db || typeof db.channel!=="function") return;
+    try {
+      db.channel("indiscretos-poder-del-trueno")
+        .on("postgres_changes",{event:"INSERT",schema:"public",table:"posts"},payload=>{
+          const post=payload?.new;
+          if (!post || !post.id || (usuario && post.user_id===usuario.id)) return;
+          let contenido={};
+          try { contenido=JSON.parse(post.content||"{}"); } catch (_) {}
+          if (contenido.poderTrueno) reproducirTruenoUnaVez(post.id);
+        })
+        .subscribe();
+    } catch(error) {
+      console.warn("El sonido de trueno usará la actualización periódica como alternativa.",error);
+    }
+  }
+
   // Arranque
   async function iniciar() {
     cargarLocal();
@@ -1046,6 +1071,7 @@ $("#postImage")?.addEventListener("change", ev => {
     try {
       await conectar();
       await cargarRemoto(true);
+      escucharPublicacionesTrueno();
       // No redibujar el muro mientras alguien está escribiendo un comentario o respuesta:
       // el refresco reemplaza el DOM y podría borrar el borrador.
       setInterval(()=>{
