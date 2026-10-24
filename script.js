@@ -605,6 +605,12 @@ $("#postImage")?.addEventListener("change", ev => {
       : "Escribí tu respuesta (máx. 500 caracteres)...";
     entrada.setAttribute("aria-label",parentCommentId===null?"Escribir comentario":"Escribir respuesta");
     entrada.required=true;
+    entrada.addEventListener("focus",()=>{
+      if (!tieneGrupo()) pedirColegio();
+    });
+    entrada.addEventListener("click",()=>{
+      if (!tieneGrupo()) pedirColegio();
+    });
     const boton=document.createElement("button");
     boton.type="submit";
     boton.className="secondary-btn comment-submit";
@@ -612,6 +618,10 @@ $("#postImage")?.addEventListener("change", ev => {
     formulario.append(entrada,boton);
     formulario.addEventListener("submit",async ev=>{
       ev.preventDefault();
+      if (!tieneGrupo()) {
+        pedirColegio();
+        return;
+      }
       const texto=entrada.value.trim();
       if (!texto) return;
       boton.disabled=true;
@@ -667,6 +677,10 @@ $("#postImage")?.addEventListener("change", ev => {
     responder.className="comment-reply-btn";
     responder.textContent="↩ Responder";
     responder.addEventListener("click",()=>{
+      if (!tieneGrupo()) {
+        pedirColegio();
+        return;
+      }
       let formulario=item.querySelector(":scope > .comment-form");
       if (formulario) {
         formulario.remove();
