@@ -344,7 +344,8 @@
 
   function actualizarGrupo() {
     const e=escuelaPorId(datos.grupoId);
-    $("#myGroup").textContent=e ? `🏫 ${e.nombre}` : "Todavía no elegiste un grupo.";
+    const etiquetaGrupo=$("#myGroup");
+    if (etiquetaGrupo) etiquetaGrupo.textContent=e ? `🏫 ${e.nombre}` : "Todavía no elegiste un grupo.";
     const navColegio=$("#joinedSchoolNav");
     const navNombre=$("#joinedSchoolNavButton");
     if (navColegio) navColegio.classList.toggle("hidden",!e);
@@ -395,16 +396,22 @@
       avisar("Primero salí de tu colegio actual usando el botón «Salir del colegio».");
       return;
     }
+    // Guardar primero la selección y actualizar la navegación sin depender de elementos antiguos.
     datos.grupoId=e.id;
     guardarLocal();
     actualizarGrupo();
     dibujarEscuelas();
     dibujarGrupo();
-    sonido("grupo");
-    avisar(`¡Te uniste a ${e.nombre}!`);
     cambiarVista("inicio");
+    // Reforzar la visibilidad y el nombre del colegio tras cambiar de vista.
+    const navColegio=$("#joinedSchoolNav");
+    const navNombre=$("#joinedSchoolNavButton");
+    if (navColegio) navColegio.classList.remove("hidden");
+    if (navNombre) navNombre.textContent="🏫 "+e.nombre;
     const mensaje=$("#schoolJoinNotice");
     if (mensaje) mensaje.classList.add("hidden");
+    sonido("grupo");
+    avisar(`¡Te uniste a ${e.nombre}!`);
   }
 
   $("#changeGroupBtn")?.addEventListener("click",()=>salirGrupo(true));
