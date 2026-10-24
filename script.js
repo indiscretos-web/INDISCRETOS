@@ -9,6 +9,7 @@
 
   let db = null;
   let usuario = null;
+  let conexionEnCurso = null;
   let datos = { grupoId: null, posts: [], reportes: [] };
   let fotoSeleccionada = "";
   let toastTimer;
@@ -134,27 +135,43 @@
   }
 
   async function conectar() {
-    if (db && usuario) return;
-    if (!window.supabase?.createClient) {
-      await new Promise((resolve,reject)=>{
-        const s=document.createElement("script");
-        s.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
-        s.onload=resolve;
-        s.onerror=()=>reject(new Error("No se pudo cargar Supabase."));
-        document.head.appendChild(s);
-      });
-    }
+    // Compartir una sola conexión si varias partes de la página arrancan a la vez.
+    if (usuario && db) return;
+    if (conexionEnCurso) return conexionEnCurso;
 
-    db = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-    const sesion = await db.auth.getSession();
-    if (sesion.error) throw sesion.error;
+    conexionEnCurso = (async () => {
+      if (!window.supabase?.createClient) {
+        await new Promise((resolve,reject)=>{
+          const s=document.createElement("script");
+          s.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+          s.onload=resolve;
+          s.onerror=()=>reject(new Error("No se pudo cargar Supabase."));
+          document.head.appendChild(s);
+        });
+      }
 
-    if (sesion.data.session) {
-      usuario = sesion.data.session.user;
-    } else {
-      const resultado = await db.auth.signInAnonymously();
-      if (resultado.error) throw resultado.error;
-      usuario = resultado.data.user;
+      // Reutilizar el cliente de Indiscretos en vez de crear instancias concurrentes.
+      db = window.__indiscretosSupabaseClient ||
+        window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+      window.__indiscretosSupabaseClient = db;
+
+      const sesion = await db.auth.getSession();
+      if (sesion.error) throw sesion.error;
+
+      if (sesion.data.session) {
+        usuario = sesion.data.session.user;
+      } else {
+        const resultado = await db.auth.signInAnonymously();
+        if (resultado.error) throw resultado.error;
+        usuario = resultado.data.user;
+      }
+      if (!usuario?.id) throw new Error("Supabase no devolvió un usuario válido.");
+    })();
+
+    try {
+      await conexionEnCurso;
+    } finally {
+      conexionEnCurso = null;
     }
   }
 
@@ -1257,7 +1274,9 @@ $("#postImage")?.addEventListener("change", ev => {
         $("#chatAliasStatus").textContent = "Ese alias ya está ocupado. Probá con otro.";
         return;
       }
-      const guardado = await db.from("chat_profiles").upsert({user_id: usuario.id, alias}, {onConflict:"user_id"});
+      const guardado = await db.from("chat_profiles")
+        .upsert({user_id: usuario.id, alias}, {onConflict:"user_id"})
+        .select("user_id,alias").single();
       if (guardado.error) {
         if (guardado.error.code === "23505") {
           $("#chatAliasStatus").textContent = "Ese alias ya está ocupado. Probá con otro.";
@@ -1265,8 +1284,11 @@ $("#postImage")?.addEventListener("change", ev => {
         }
         throw guardado.error;
       }
-      chatAliasActual = alias;
-      $("#chatOwnAlias").textContent = alias;
+      if (!guardado.data || guardado.data.user_id !== usuario.id || guardado.data.alias !== alias) {
+        throw new Error("Supabase no confirmó el alias guardado.");
+      }
+      chatAliasActual = guardado.data.alias;
+      $("#chatOwnAlias").textContent = chatAliasActual;
       $("#chatAliasStatus").textContent = "";
       mostrarAliasSetup(false);
       leerChatsGuardados();
