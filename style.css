@@ -1096,3 +1096,32 @@ button:active, .upload-btn:active {
     margin: 0;
   }
 }
+
+
+/* Comentarios plegables, al estilo de las redes sociales */
+.comments-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #21182d;
+  color: var(--purple-light);
+  text-align: left;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease;
+}
+.comments-toggle:hover {
+  background: #30243d;
+  border-color: var(--purple);
+}
+.comments-content {
+  padding-top: 12px;
+}
+.comments-content.hidden {
+  display: none !important;
+}
