@@ -1193,13 +1193,11 @@ $("#postImage")?.addEventListener("change", ev => {
   async function sincronizarChatsEntrantes() {
     if (!usuario || !db) return;
     try {
-      const corte = new Date(Date.now() - CHAT_TTL_MS).toISOString();
       const recibidos = await db.from("direct_messages")
         .select("sender_id,recipient_id,created_at")
         .or("sender_id.eq." + usuario.id + ",recipient_id.eq." + usuario.id)
-        .gte("created_at", corte)
         .order("created_at", {ascending:false})
-        .limit(500);
+        .limit(1000);
       if (recibidos.error) throw recibidos.error;
 
       const mensajes = recibidos.data || [];
