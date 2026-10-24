@@ -1048,3 +1048,51 @@ button:active, .upload-btn:active {
     white-space: nowrap;
   }
 }
+
+
+/* Acceso al colegio actual: aparece solo mientras la persona esté unida. */
+.joined-school-nav {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.joined-school-nav .nav-btn {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.nav-leave-btn {
+  justify-self: start;
+  margin: 0 0 0 12px;
+  padding: 4px 8px;
+  border: 1px solid #75404f;
+  border-radius: 7px;
+  background: #39202b;
+  color: #ffb4c2;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.nav-leave-btn:hover {
+  background: #512635;
+  border-color: #a84d73;
+}
+@media (max-width: 700px) {
+  .joined-school-nav {
+    flex: 0 0 auto;
+    width: max-content;
+    max-width: 210px;
+    align-content: start;
+  }
+  .joined-school-nav .nav-btn {
+    width: 100%;
+    max-width: 210px;
+    padding: 8px 9px;
+    text-align: center;
+    font-size: 11px;
+  }
+  .joined-school-nav .nav-leave-btn {
+    justify-self: center;
+    margin: 0;
+  }
+}
