@@ -1294,12 +1294,23 @@ $("#postImage")?.addEventListener("change", ev => {
   // Sincroniza la bandeja y, si hay una conversación abierta en pantalla, vuelve a cargarla.
   // Esto mantiene la vista de la PC actualizada aunque el chat se haya abierto antes de recibir mensajes.
   async function refrescarBandejaCompleta() {
-    if (document.hidden || !usuario || !db) return;
-    await sincronizarChatsEntrantes();
-    const mensajesVisible = $("#view-mensajes") && !$("#view-mensajes").classList.contains("hidden");
-    const salaVisible = $("#chatRoom") && !$("#chatRoom").classList.contains("hidden");
-    if (chatActivoId && mensajesVisible && salaVisible && !$("#chatMessageInput")?.value) {
-      await actualizarMensajesChat();
+    if (document.hidden || !db) return;
+    try {
+      // Leer la sesión vigente en cada actualización evita depender de una variable vieja.
+      const sesion = await db.auth.getSession();
+      if (sesion.error) throw sesion.error;
+      const usuarioActual = sesion.data?.session?.user;
+      if (!usuarioActual?.id) return;
+      usuario = usuarioActual;
+      if (usuario.is_anonymous) return;
+      await sincronizarChatsEntrantes();
+      const mensajesVisible = $("#view-mensajes") && !$("#view-mensajes").classList.contains("hidden");
+      const salaVisible = $("#chatRoom") && !$("#chatRoom").classList.contains("hidden");
+      if (chatActivoId && mensajesVisible && salaVisible && !$("#chatMessageInput")?.value) {
+        await actualizarMensajesChat();
+      }
+    } catch (error) {
+      console.warn("No se pudo actualizar la bandeja de mensajes:", error);
     }
   }
 
@@ -1344,30 +1355,7 @@ $("#postImage")?.addEventListener("change", ev => {
         $("#chatWorkspace")?.classList.remove("hidden");
         await sincronizarChatsEntrantes();
         dibujarChatsGuardados();
-        if (chatInboxTimer) clearInterval(chatInboxTimer);
-        chatInboxTimer = setInterval(() => {
-          if (!document.hidden) refrescarBandejaCompleta();
-        }, 5000);
-
-        // Aviso inmediato de mensajes nuevos, incluso cuando la sección Mensajes no está abierta.
-        if (chatInboxRealtime) {
-          try { await db.removeChannel(chatInboxRealtime); } catch (_) {}
-          chatInboxRealtime = null;
-        }
-        try {
-          chatInboxRealtime = db.channel("indiscretos-inbox-" + usuario.id)
-            .on("postgres_changes", {
-              event: "INSERT",
-              schema: "public",
-              table: "direct_messages",
-              filter: "recipient_id=eq." + usuario.id
-            }, () => {
-              if (!document.hidden) refrescarBandejaCompleta();
-            })
-            .subscribe();
-        } catch (errorRealtime) {
-          console.warn("Avisos instantáneos no disponibles; seguirá la actualización periódica.", errorRealtime);
-        }
+        iniciarAvisosNuevosMensajes();
       } else {
         panel?.classList.remove("hidden");
         $("#chatWorkspace")?.classList.add("hidden");
@@ -1388,6 +1376,30 @@ $("#postImage")?.addEventListener("change", ev => {
     return /^[A-Za-z0-9_]{3,8}$/.test(alias);
   }
 
+  function iniciarAvisosNuevosMensajes() {
+    if (!db || !usuario?.id || usuario.is_anonymous) return;
+    if (chatInboxRealtime) {
+      try { db.removeChannel(chatInboxRealtime); } catch (_) {}
+      chatInboxRealtime = null;
+    }
+    try {
+      chatInboxRealtime = db.channel("indiscretos-inbox-" + usuario.id)
+        .on("postgres_changes", {
+          event: "INSERT", schema: "public", table: "direct_messages",
+          filter: "recipient_id=eq." + usuario.id
+        }, () => {
+          if (!document.hidden) refrescarBandejaCompleta();
+        })
+        .subscribe();
+    } catch (error) {
+      console.warn("Avisos inmediatos no disponibles; se usará la actualización periódica.", error);
+    }
+    if (chatInboxTimer) clearInterval(chatInboxTimer);
+    chatInboxTimer = setInterval(() => {
+      if (!document.hidden) refrescarBandejaCompleta();
+    }, 5000);
+  }
+
   async function refrescarChatTrasLogin(perfil) {
     const verificacion = await db.auth.getUser();
     if (verificacion.error) throw verificacion.error;
@@ -1405,10 +1417,7 @@ $("#postImage")?.addEventListener("change", ev => {
     leerChatsGuardados();
     dibujarChatsGuardados();
     await sincronizarChatsEntrantes();
-    if (chatInboxTimer) clearInterval(chatInboxTimer);
-    chatInboxTimer = setInterval(() => {
-      if (!document.hidden) refrescarBandejaCompleta();
-    }, 5000);
+    iniciarAvisosNuevosMensajes();
   }
 
   $("#chatAccountLinkBtn")?.addEventListener("click", async () => {
