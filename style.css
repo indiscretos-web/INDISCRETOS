@@ -1328,3 +1328,50 @@ body.thunder-theme .achievement-card {
   .chat-account-actions { width: 100%; }
   .chat-account-actions .secondary-btn { flex: 1 1 auto; }
 }
+
+
+/* Contadores de mensajes sin leer: turquesa eléctrico para contrastar con el violeta. */
+.messages-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.message-count-badge, .chat-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 23px;
+  height: 23px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #71e7f5;
+  color: #21162d;
+  font-size: 11px;
+  font-weight: 950;
+  line-height: 1;
+  box-shadow: 0 0 0 2px #211a2c;
+}
+.saved-chat-row {
+  flex-direction: row;
+  align-items: center;
+}
+.saved-chat-info {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 2px;
+}
+.saved-chat-name {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 800;
+}
+.chat-unread-badge { box-shadow: none; }
+@media (max-width: 700px) {
+  .messages-nav-btn { justify-content: center; }
+}
