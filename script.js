@@ -1312,8 +1312,10 @@ $("#postImage")?.addEventListener("change", ev => {
   }
   // Sincroniza la bandeja y, si hay una conversación abierta en pantalla, vuelve a cargarla.
   // Esto mantiene la vista de la PC actualizada aunque el chat se haya abierto antes de recibir mensajes.
+  let refrescoBandejaEnCurso = false;
   async function refrescarBandejaCompleta() {
-    if (document.hidden || !db) return;
+    if (document.hidden || !db || refrescoBandejaEnCurso) return;
+    refrescoBandejaEnCurso = true;
     try {
       // Leer la sesión vigente en cada actualización evita depender de una variable vieja.
       const sesion = await db.auth.getSession();
@@ -1330,6 +1332,8 @@ $("#postImage")?.addEventListener("change", ev => {
       }
     } catch (error) {
       console.warn("No se pudo actualizar la bandeja de mensajes:", error);
+    } finally {
+      refrescoBandejaEnCurso = false;
     }
   }
 
@@ -1446,7 +1450,7 @@ $("#postImage")?.addEventListener("change", ev => {
     if (chatInboxTimer) clearInterval(chatInboxTimer);
     chatInboxTimer = setInterval(() => {
       if (!document.hidden) refrescarBandejaCompleta();
-    }, 5000);
+    }, 15000);
   }
 
   async function refrescarChatTrasLogin(perfil) {
@@ -1781,7 +1785,7 @@ $("#postImage")?.addEventListener("change", ev => {
       const salaVisible = $("#chatRoom") && !$("#chatRoom").classList.contains("hidden");
       // Refrescar aunque el usuario esté escribiendo; actualizarMensajesChat no modifica el borrador.
       if (chatActivoId === userId && mensajesVisible && salaVisible && !document.hidden) actualizarMensajesChat();
-    }, 3000);
+    }, 10000);
   }
   async function actualizarMensajesChat() {
     const chat = buscarChatGuardado(chatActivoId);
