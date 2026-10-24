@@ -1457,7 +1457,7 @@ $("#postImage")?.addEventListener("change", ev => {
     if (chatInboxTimer) clearInterval(chatInboxTimer);
     chatInboxTimer = setInterval(() => {
       if (!document.hidden) refrescarBandejaCompleta();
-    }, 15000);
+    }, 30000);
   }
 
   async function refrescarChatTrasLogin(perfil) {
@@ -1792,7 +1792,7 @@ $("#postImage")?.addEventListener("change", ev => {
       const salaVisible = $("#chatRoom") && !$("#chatRoom").classList.contains("hidden");
       // Refrescar aunque el usuario esté escribiendo; actualizarMensajesChat no modifica el borrador.
       if (chatActivoId === userId && mensajesVisible && salaVisible && !document.hidden) actualizarMensajesChat();
-    }, 10000);
+    }, 20000);
   }
   async function actualizarMensajesChat() {
     const chat = buscarChatGuardado(chatActivoId);
@@ -2054,7 +2054,7 @@ $("#postImage")?.addEventListener("change", ev => {
           campo === document.activeElement || campo.value.length > 0
         );
         if (!editando) cargarRemoto(false);
-      },30000);
+      },60000);
     } catch (error) {
       console.error(error);
       avisar("No se pudo conectar a Supabase. Revisá la configuración.");
