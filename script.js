@@ -1287,6 +1287,12 @@ $("#postImage")?.addEventListener("change", ev => {
   async function iniciarMensajesPrivados() {
     try {
       await conectar();
+      // La sesión de Auth es la fuente de verdad al volver a la sección.
+      // No confiar únicamente en la variable usuario, que puede quedar desactualizada.
+      const sesionActual = await db.auth.getSession();
+      if (sesionActual.error) throw sesionActual.error;
+      usuario = sesionActual.data?.session?.user || usuario;
+      if (!usuario?.id) throw new Error("No se pudo recuperar la sesión. Volvé a iniciar sesión.");
       const r = await db.from("chat_profiles").select("user_id,alias").eq("user_id", usuario.id).maybeSingle();
       if (r.error) throw r.error;
       leerChatsGuardados();
