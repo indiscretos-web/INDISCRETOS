@@ -359,15 +359,39 @@
     dibujarFeed();
   }
 
-  function entrarGrupo(id) {
-    if (tieneGrupo()) {
-      sonido("error");
-      avisar("Ya pertenecés a un grupo. Salí del actual para cambiar.");
+  function salirGrupo(pedirConfirmacion = true) {
+    if (!tieneGrupo()) {
+      datos.grupoId=null;
+      guardarLocal();
+      actualizarGrupo();
+      dibujarEscuelas();
       return;
     }
+    if (pedirConfirmacion && !confirm("¿Querés salir de tu colegio actual?")) return;
+    datos.grupoId=null;
+    guardarLocal();
+    actualizarGrupo();
+    dibujarGrupo();
+    dibujarEscuelas();
+    cambiarVista("colegios");
+    avisar("Saliste del colegio. Ahora podés elegir otro.");
+  }
+
+  function entrarGrupo(id) {
     const e=escuelaPorId(id);
-    if (!e) return;
-    datos.grupoId=id;
+    if (!e) {
+      datos.grupoId=null;
+      guardarLocal();
+      dibujarEscuelas();
+      avisar("Ese colegio ya no está disponible. Elegí uno de la lista.");
+      return;
+    }
+    if (tieneGrupo()) {
+      sonido("error");
+      avisar("Primero salí de tu colegio actual usando el botón «Salir del colegio».");
+      return;
+    }
+    datos.grupoId=e.id;
     guardarLocal();
     actualizarGrupo();
     dibujarEscuelas();
@@ -379,16 +403,7 @@
     if (mensaje) mensaje.classList.add("hidden");
   }
 
-  $("#changeGroupBtn")?.addEventListener("click",()=>{
-    sonido("salir");
-    if (!confirm("¿Querés salir de tu grupo actual?")) return;
-    datos.grupoId=null;
-    guardarLocal();
-    actualizarGrupo();
-    dibujarEscuelas();
-    cambiarVista("colegios");
-    avisar("Saliste del grupo. Ahora podés elegir otro.");
-  });
+  $("#changeGroupBtn")?.addEventListener("click",()=>salirGrupo(true));
 
   function dibujarEscuelas(filtro = $("#schoolSearch")?.value || "") {
     const lista=$("#schoolList");
@@ -402,7 +417,7 @@
     }
 
     resultados.forEach(e=>{
-      const actual=datos.grupoId===e.id;
+      const actual=String(datos.grupoId||"")===String(e.id);
       const ocupado=tieneGrupo()&&!actual;
       const tarjeta=document.createElement("article");
       tarjeta.className="school-card";
@@ -416,13 +431,17 @@
       const direccion=document.createElement("p");
       direccion.textContent="📍 "+e.direccion;
       const estado=document.createElement("p");
-      estado.textContent=actual?"✓ Tu grupo actual":ocupado?"Ya pertenecés a otro grupo.":"Entrá para participar en este grupo.";
+      estado.textContent=actual?"✓ Estás unido a este colegio":ocupado?"Salí de tu colegio actual para cambiar.":"Unite para participar en este colegio.";
       info.append(nombre,direccion,crearMapa(e),estado);
       const boton=document.createElement("button");
       boton.className=actual?"secondary-btn":"primary-btn";
-      boton.textContent=actual?"Mi grupo ✓":"Entrar";
-      boton.disabled=actual||ocupado;
-      if (!boton.disabled) boton.addEventListener("click",()=>entrarGrupo(e.id));
+      boton.textContent=actual?"Salir del colegio":"Entrar";
+      boton.disabled=ocupado;
+      if (actual) {
+        boton.addEventListener("click",()=>salirGrupo(true));
+      } else if (!ocupado) {
+        boton.addEventListener("click",()=>entrarGrupo(e.id));
+      }
       tarjeta.append(emoji,info,boton);
       lista.append(tarjeta);
     });
@@ -913,6 +932,11 @@ $("#postImage")?.addEventListener("change", ev => {
   // Arranque
   async function iniciar() {
     cargarLocal();
+    // Si el colegio guardado ya no existe en la lista, limpiar la selección vieja.
+    if (datos.grupoId && !escuelaPorId(datos.grupoId)) {
+      datos.grupoId=null;
+      guardarLocal();
+    }
     iniciarSplash();
     dibujarEscuelas();
     dibujarGrupo();
