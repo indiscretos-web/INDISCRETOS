@@ -1367,8 +1367,11 @@ $("#postImage")?.addEventListener("change", ev => {
         if ($("#chatAccountAlias")) $("#chatAccountAlias").value = chatAliasActual;
       }
 
-      if (permanente && r.data) {
-        panel?.classList.add("hidden");
+      if (r.data) {
+        // Una sesión anónima con alias también puede usar el chat.
+        // Conservamos visible el panel de cuenta para que pueda vincular contraseña
+        // y usar la misma identidad en el celular y la computadora.
+        panel?.classList.toggle("hidden", permanente);
         mostrarAliasSetup(false);
         $("#chatWorkspace")?.classList.remove("hidden");
         await sincronizarChatsEntrantes();
