@@ -1375,13 +1375,29 @@ $("#postImage")?.addEventListener("change", ev => {
         dibujarChatsGuardados();
         iniciarAvisosNuevosMensajes();
       } else {
-        panel?.classList.remove("hidden");
-        $("#chatWorkspace")?.classList.add("hidden");
-        $("#chatAliasSetup")?.classList.add("hidden");
-        if (chatInboxTimer) clearInterval(chatInboxTimer);
-        if (chatInboxRealtime) {
-          try { db.removeChannel(chatInboxRealtime); } catch (_) {}
-          chatInboxRealtime = null;
+        // Si el panel de la cuenta ya estaba abierto con una cuenta permanente,
+        // no desmontarlo por una lectura transitoria de sesión al volver desde otra vista.
+        const workspaceActivo = Boolean(
+          chatAliasActual &&
+          usuario?.is_anonymous === false &&
+          $("#chatWorkspace") &&
+          !$("#chatWorkspace").classList.contains("hidden")
+        );
+        if (workspaceActivo) {
+          panel?.classList.add("hidden");
+          $("#chatAliasSetup")?.classList.add("hidden");
+          await sincronizarChatsEntrantes();
+          dibujarChatsGuardados();
+          iniciarAvisosNuevosMensajes();
+        } else {
+          panel?.classList.remove("hidden");
+          $("#chatWorkspace")?.classList.add("hidden");
+          $("#chatAliasSetup")?.classList.add("hidden");
+          if (chatInboxTimer) clearInterval(chatInboxTimer);
+          if (chatInboxRealtime) {
+            try { db.removeChannel(chatInboxRealtime); } catch (_) {}
+            chatInboxRealtime = null;
+          }
         }
       }
     } catch (error) {
