@@ -1104,6 +1104,7 @@ $("#postImage")?.addEventListener("change", ev => {
   const chatsGuardados = [];
   const mensajesSinLeerPorChat = Object.create(null);
   let chatInboxTimer = null;
+  let chatInboxRealtime = null;
   const chatLocalKey = () => "indiscretos_chats_v1_" + (usuario?.id || "sin-cuenta");
   const chatReadKey = id => "indiscretos_chat_leido_v1_" + (usuario?.id || "sin-cuenta") + "_" + id;
   function ultimaLecturaChat(id) {
@@ -1347,6 +1348,26 @@ $("#postImage")?.addEventListener("change", ev => {
         chatInboxTimer = setInterval(() => {
           if (!document.hidden) refrescarBandejaCompleta();
         }, 5000);
+
+        // Aviso inmediato de mensajes nuevos, incluso cuando la sección Mensajes no está abierta.
+        if (chatInboxRealtime) {
+          try { await db.removeChannel(chatInboxRealtime); } catch (_) {}
+          chatInboxRealtime = null;
+        }
+        try {
+          chatInboxRealtime = db.channel("indiscretos-inbox-" + usuario.id)
+            .on("postgres_changes", {
+              event: "INSERT",
+              schema: "public",
+              table: "direct_messages",
+              filter: "recipient_id=eq." + usuario.id
+            }, () => {
+              if (!document.hidden) refrescarBandejaCompleta();
+            })
+            .subscribe();
+        } catch (errorRealtime) {
+          console.warn("Avisos instantáneos no disponibles; seguirá la actualización periódica.", errorRealtime);
+        }
       } else {
         panel?.classList.remove("hidden");
         $("#chatWorkspace")?.classList.add("hidden");
