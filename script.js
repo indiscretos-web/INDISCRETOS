@@ -1102,8 +1102,30 @@ $("#postImage")?.addEventListener("change", ev => {
   let chatRefreshTimer = null;
   const CHAT_TTL_MS = 60 * 60 * 1000;
   const chatsGuardados = [];
+  const mensajesSinLeerPorChat = Object.create(null);
   let chatInboxTimer = null;
   const chatLocalKey = () => "indiscretos_chats_v1_" + (usuario?.id || "sin-cuenta");
+  const chatReadKey = id => "indiscretos_chat_leido_v1_" + (usuario?.id || "sin-cuenta") + "_" + id;
+  function ultimaLecturaChat(id) {
+    try { return Number(localStorage.getItem(chatReadKey(id))) || 0; } catch (_) { return 0; }
+  }
+  function marcarChatLeido(id, fecha = Date.now()) {
+    if (!id) return;
+    const marca = typeof fecha === "number" ? fecha : Date.parse(fecha);
+    if (Number.isFinite(marca) && marca > ultimaLecturaChat(id)) {
+      try { localStorage.setItem(chatReadKey(id), String(marca)); } catch (_) {}
+    }
+    delete mensajesSinLeerPorChat[id];
+    actualizarContadorMensajes();
+  }
+  function actualizarContadorMensajes() {
+    const badge = $("#messagesNavBadge");
+    if (!badge) return;
+    const total = Object.values(mensajesSinLeerPorChat).reduce((s,n) => s + (Number(n) || 0), 0);
+    badge.textContent = total > 99 ? "99+" : String(total);
+    badge.classList.toggle("hidden", total < 1);
+    badge.setAttribute("aria-label", total + (total === 1 ? " mensaje sin leer" : " mensajes sin leer"));
+  }
   const mensajesLocalKey = id => "indiscretos_mensajes_v1_" + (usuario?.id || "sin-cuenta") + "_" + id;
 
   function leerChatsGuardados() {
@@ -1151,11 +1173,23 @@ $("#postImage")?.addEventListener("change", ev => {
       const fila = document.createElement("button");
       fila.type = "button";
       fila.className = "saved-chat-row" + (chatActivoId === chat.userId ? " active" : "");
+      const info = document.createElement("span");
+      info.className = "saved-chat-info";
       const nombre = document.createElement("span");
+      nombre.className = "saved-chat-name";
       nombre.textContent = chat.title || chat.alias;
       const alias = document.createElement("small");
       alias.textContent = "@" + chat.alias;
-      fila.append(nombre, alias);
+      info.append(nombre, alias);
+      fila.append(info);
+      const sinLeer = Number(mensajesSinLeerPorChat[chat.userId]) || 0;
+      if (sinLeer > 0) {
+        const burbuja = document.createElement("span");
+        burbuja.className = "chat-unread-badge";
+        burbuja.textContent = sinLeer > 99 ? "99+" : String(sinLeer);
+        burbuja.setAttribute("aria-label", sinLeer + (sinLeer === 1 ? " mensaje sin leer" : " mensajes sin leer"));
+        fila.append(burbuja);
+      }
       fila.addEventListener("click", () => abrirChatGuardado(chat.userId));
       cont.append(fila);
     });
@@ -1169,10 +1203,26 @@ $("#postImage")?.addEventListener("change", ev => {
         .or("sender_id.eq." + usuario.id + ",recipient_id.eq." + usuario.id)
         .gte("created_at", corte)
         .order("created_at", {ascending:false})
-        .limit(100);
+        .limit(500);
       if (recibidos.error) throw recibidos.error;
 
-      const otrosIds = [...new Set((recibidos.data || []).map(m =>
+      const mensajes = recibidos.data || [];
+      Object.keys(mensajesSinLeerPorChat).forEach(id => delete mensajesSinLeerPorChat[id]);
+      mensajes.forEach(m => {
+        if (m.recipient_id !== usuario.id || !m.sender_id || m.sender_id === usuario.id) return;
+        const salaAbierta = m.sender_id === chatActivoId &&
+          $("#view-mensajes") && !$("#view-mensajes").classList.contains("hidden") &&
+          $("#chatRoom") && !$("#chatRoom").classList.contains("hidden") &&
+          !document.hidden;
+        if (salaAbierta) return;
+        if (Date.parse(m.created_at) > ultimaLecturaChat(m.sender_id)) {
+          mensajesSinLeerPorChat[m.sender_id] = (mensajesSinLeerPorChat[m.sender_id] || 0) + 1;
+        }
+      });
+      actualizarContadorMensajes();
+      dibujarChatsGuardados();
+
+      const otrosIds = [...new Set(mensajes.map(m =>
         m.sender_id === usuario.id ? m.recipient_id : m.sender_id
       ).filter(Boolean).filter(id => id !== usuario.id))];
       if (!otrosIds.length) return;
@@ -1187,8 +1237,9 @@ $("#postImage")?.addEventListener("change", ev => {
           chatsGuardados.unshift(chat);
           cambio = true;
         } else if (chat.alias !== perfil.alias) {
+          const aliasAnterior = chat.alias;
           chat.alias = perfil.alias;
-          if (!chat.title || chat.title === chat.alias) chat.title = perfil.alias;
+          if (!chat.title || chat.title === aliasAnterior) chat.title = perfil.alias;
           cambio = true;
         }
       });
@@ -1587,6 +1638,7 @@ $("#postImage")?.addEventListener("change", ev => {
     const chat = buscarChatGuardado(userId);
     if (!chat) return;
     chatActivoId = userId;
+    marcarChatLeido(userId, Date.now());
     $("#chatRoom").classList.remove("hidden");
     $("#chatRoomTitle").textContent = chat.title || chat.alias;
     $("#chatRoomAlias").textContent = "Conversación con @" + chat.alias;
@@ -1612,6 +1664,10 @@ $("#postImage")?.addEventListener("change", ev => {
       [...local, ...(r.data || [])].filter(m => Date.parse(m.created_at) > Date.now() - CHAT_TTL_MS).forEach(m => unicos.set(m.id, m));
       const mensajes = [...unicos.values()].sort((a,b) => Date.parse(a.created_at)-Date.parse(b.created_at));
       guardarMensajesLocales(chat.userId, mensajes);
+      const ultimoRecibido = mensajes
+        .filter(m => m.sender_id === chat.userId && m.recipient_id === usuario.id)
+        .reduce((ultimo, m) => Math.max(ultimo, Date.parse(m.created_at) || 0), 0);
+      if (ultimoRecibido > 0) marcarChatLeido(chat.userId, ultimoRecibido);
       cont.replaceChildren();
       if (!mensajes.length) {
         cont.innerHTML = '<p class="tiny-note">Todavía no hay mensajes. ¡Mandá el primero!</p>';
