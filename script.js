@@ -693,7 +693,16 @@ $("#postImage")?.addEventListener("change", ev => {
     const item=document.createElement("article");
     item.className="comment-item";
     const autor=document.createElement("strong");
+    autor.className="comment-author";
     autor.textContent="🎭 Anónimo";
+    const insigniaComentario=etiquetasDeAutor(comentario.user_id)[0];
+    if (insigniaComentario) {
+      const insignia=document.createElement("span");
+      insignia.className="author-achievement-tag "+insigniaComentario.clase;
+      insignia.textContent=insigniaComentario.texto;
+      insignia.title="Logro actual";
+      autor.append(" ",insignia);
+    }
     item.append(autor);
     const escuelaComentario=escuelaPorId(comentario.school_id);
     if (escuelaComentario) {
@@ -768,17 +777,18 @@ $("#postImage")?.addEventListener("change", ev => {
       .flatMap(p=>p.comentarios||[])
       .filter(c=>c.user_id===autorId).length;
     const totalLikes = publicaciones.reduce((n,p)=>n+(Number(p.likes)||0),0);
-    const etiquetas = [];
-    if (publicaciones.length >= 1) etiquetas.push({texto:"APRENDIZ",clase:"tag-aprendiz"});
-    if (comentarios >= 1) etiquetas.push({texto:"RECLUTA",clase:"tag-recluta"});
-    if (publicaciones.length >= 3) etiquetas.push({texto:"ÉLITE",clase:"tag-elite"});
-    if (publicaciones.some(p=>Number(p.likes)>=5)) etiquetas.push({texto:"PREMIUM",clase:"tag-premium"});
-    if (comentarios >= 5) etiquetas.push({texto:"CLASE C",clase:"tag-clase-c"});
-    if (publicaciones.length >= 5) etiquetas.push({texto:"CLASE B",clase:"tag-clase-b"});
-    if (totalLikes >= 10) etiquetas.push({texto:"CLASE A",clase:"tag-clase-a"});
-    if (publicaciones.length >= 10) etiquetas.push({texto:"ABSOLUTE",clase:"tag-absolute"});
-    if (publicaciones.length >= 10 && totalLikes >= 20) etiquetas.push({texto:"⚡ PODER DEL TRUENO",clase:"tag-trueno"});
-    return etiquetas;
+
+    // Solo se muestra la insignia de mayor nivel desbloqueada; al avanzar, reemplaza la anterior.
+    if (publicaciones.length >= 10 && totalLikes >= 20) return [{texto:"⚡ PODER DEL TRUENO",clase:"tag-trueno"}];
+    if (publicaciones.length >= 10) return [{texto:"ABSOLUTE",clase:"tag-absolute"}];
+    if (totalLikes >= 10) return [{texto:"CLASE A",clase:"tag-clase-a"}];
+    if (publicaciones.length >= 5) return [{texto:"CLASE B",clase:"tag-clase-b"}];
+    if (comentarios >= 5) return [{texto:"CLASE C",clase:"tag-clase-c"}];
+    if (publicaciones.some(p=>Number(p.likes)>=5)) return [{texto:"PREMIUM",clase:"tag-premium"}];
+    if (publicaciones.length >= 3) return [{texto:"ÉLITE",clase:"tag-elite"}];
+    if (comentarios >= 1) return [{texto:"RECLUTA",clase:"tag-recluta"}];
+    if (publicaciones.length >= 1) return [{texto:"APRENDIZ",clase:"tag-aprendiz"}];
+    return [];
   }
 
   function crearPost(post) {
