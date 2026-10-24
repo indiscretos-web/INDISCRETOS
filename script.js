@@ -1428,7 +1428,25 @@ $("#postImage")?.addEventListener("change", ev => {
     boton.disabled = true;
     try {
       await conectar();
-      const r = await db.from("direct_messages").insert({sender_id:usuario.id, recipient_id:chat.userId, content:texto}).select("id,sender_id,recipient_id,content,created_at").single();
+
+      // Leer el usuario autenticado directamente del cliente que realiza el INSERT.
+      // Evita enviar un sender_id viejo si la sesión anónima se renovó o cambió.
+      const authActual = await db.auth.getUser();
+      if (authActual.error) throw authActual.error;
+      const remitente = authActual.data?.user;
+      if (!remitente?.id) throw new Error("No hay una sesión activa. Recargá la página e intentá de nuevo.");
+      usuario = remitente;
+
+      // Verificar que el remitente tenga perfil propio; la tabla de mensajes
+      // exige que exista chat_profiles para sender_id y que coincida con auth.uid().
+      const perfilRemitente = await db.from("chat_profiles")
+        .select("user_id").eq("user_id", remitente.id).maybeSingle();
+      if (perfilRemitente.error) throw perfilRemitente.error;
+      if (!perfilRemitente.data) throw new Error("Tu alias no está registrado en esta sesión. Entrá a Mensajes privados y configurá tu alias nuevamente.");
+
+      const r = await db.from("direct_messages")
+        .insert({sender_id:remitente.id, recipient_id:chat.userId, content:texto})
+        .select("id,sender_id,recipient_id,content,created_at").single();
       if (r.error) throw r.error;
       const lista = leerMensajesLocales(chat.userId);
       lista.push(r.data);
