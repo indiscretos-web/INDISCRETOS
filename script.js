@@ -328,7 +328,12 @@
         .eq("post_id",post.id).eq("user_id",usuario.id);
       if (r.error) throw r.error;
     } else {
-      if (Number(post.likes) >= 40) {
+      // Consultar el total real antes de insertar para no depender de un contador visual desactualizado.
+      const conteo = await db.from("post_likes")
+        .select("*",{count:"exact",head:true})
+        .eq("post_id",post.id);
+      if (conteo.error) throw conteo.error;
+      if ((conteo.count ?? Number(post.likes)) >= 40) {
         const error = new Error("MAX_LIKES");
         throw error;
       }
