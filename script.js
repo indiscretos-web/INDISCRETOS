@@ -806,9 +806,8 @@ $("#postImage")?.addEventListener("change", ev => {
     const etiqueta=document.createElement("div");
     etiqueta.className="school-tag";
     etiqueta.textContent=post.tipo==="grupo"&&e?`🌎 Feed · 🏫 ${e.nombre}`:"🌎 Publicación pública";
-    identidad.append(autor);
-    if (etiquetasAutor.childElementCount) identidad.append(etiquetasAutor);
-    identidad.append(fecha,etiqueta);
+    if (etiquetasAutor.childElementCount) autor.append(etiquetasAutor);
+    identidad.append(autor,fecha,etiqueta);
     cabecera.append(avatar,identidad);
     articulo.append(cabecera);
 
