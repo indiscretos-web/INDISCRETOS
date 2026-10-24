@@ -150,6 +150,7 @@
           <p id="chatAliasStatus" class="tiny-note" role="status"></p>
         </section>
         <section class="card hidden" id="chatWorkspace">
+          <p id="chatSyncStatus" class="tiny-note" role="status" aria-live="polite"></p>
           <div class="chat-self-row"><span>Tu alias: <strong id="chatOwnAlias"></strong></span><div class="chat-account-actions"><button class="secondary-btn" id="chatChangeAlias" type="button">Cambiar alias</button><button class="secondary-btn" id="chatTogglePasswordPanel" type="button">Cambiar contraseña</button></div></div>
           <section class="card hidden" id="chatPasswordPanel"><h3>Cambiar contraseña</h3><form id="chatPasswordForm" class="chat-form"><label for="chatCurrentPassword">Contraseña actual</label><div class="password-field"><input id="chatCurrentPassword" type="password" autocomplete="current-password" minlength="8" maxlength="72" required><button class="secondary-btn password-toggle" type="button" data-toggle-password="chatCurrentPassword" aria-pressed="false">Ver</button></div><label for="chatNewPassword">Nueva contraseña</label><div class="password-field"><input id="chatNewPassword" type="password" autocomplete="new-password" minlength="8" maxlength="72" placeholder="Mínimo 8 caracteres" required><button class="secondary-btn password-toggle" type="button" data-toggle-password="chatNewPassword" aria-pressed="false">Ver</button></div><label for="chatNewPasswordConfirm">Repetí la nueva contraseña</label><div class="password-field"><input id="chatNewPasswordConfirm" type="password" autocomplete="new-password" minlength="8" maxlength="72" required><button class="secondary-btn password-toggle" type="button" data-toggle-password="chatNewPasswordConfirm" aria-pressed="false">Ver</button></div><button class="primary-btn" id="chatPasswordSaveBtn" type="submit">Guardar nueva contraseña</button><p id="chatPasswordStatus" class="tiny-note" role="status" aria-live="polite"></p></form></section>
           <form id="chatSearchForm" class="chat-form"><label for="chatSearchInput">Buscar a alguien por su alias</label><div class="chat-search-row"><input id="chatSearchInput" maxlength="8" autocomplete="off" placeholder="Buscá un usuario"><button class="primary-btn" type="submit">Buscar</button></div></form>
@@ -168,6 +169,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="script.js?v=20261024-15"></script>
+  <script src="script.js?v=20261024-16"></script>
 </body>
 </html>
