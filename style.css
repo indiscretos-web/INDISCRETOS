@@ -1292,3 +1292,39 @@ body.thunder-theme .achievement-card {
   .chat-room-header { align-items:flex-start; }
   .chat-room-header > div { width:100%; }
 }
+
+
+/* Controles de seguridad de la cuenta */
+.password-field {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+.password-field input {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 0;
+}
+.password-field .password-toggle {
+  flex: 0 0 auto;
+  align-self: stretch;
+  margin: 0;
+  min-width: 72px;
+}
+.chat-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chat-account-actions .secondary-btn { margin: 0; }
+#chatChangeAlias:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+#chatPasswordPanel { margin-top: 14px; }
+#chatPasswordPanel.hidden { display: none !important; }
+@media (max-width: 700px) {
+  .chat-account-actions { width: 100%; }
+  .chat-account-actions .secondary-btn { flex: 1 1 auto; }
+}
