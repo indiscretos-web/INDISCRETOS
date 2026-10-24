@@ -1113,7 +1113,9 @@ $("#postImage")?.addEventListener("change", ev => {
   function marcarChatLeido(id, fecha = Date.now()) {
     if (!id) return;
     const marca = typeof fecha === "number" ? fecha : Date.parse(fecha);
-    if (Number.isFinite(marca) && marca > ultimaLecturaChat(id)) {
+    if (Number.isFinite(marca)) {
+      // La conversación visible manda: reemplazar también marcas antiguas del reloj local
+      // por la fecha real del último mensaje guardada por Supabase.
       try { localStorage.setItem(chatReadKey(id), String(marca)); } catch (_) {}
     }
     delete mensajesSinLeerPorChat[id];
@@ -1706,7 +1708,6 @@ $("#postImage")?.addEventListener("change", ev => {
     const chat = buscarChatGuardado(userId);
     if (!chat) return;
     chatActivoId = userId;
-    marcarChatLeido(userId, Date.now());
     $("#chatRoom").classList.remove("hidden");
     $("#chatRoomTitle").textContent = chat.title || chat.alias;
     $("#chatRoomAlias").textContent = "Conversación con @" + chat.alias;
