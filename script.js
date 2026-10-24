@@ -196,6 +196,22 @@
         }
       }
 
+      // Buscar los alias configurados para autores de publicaciones, comentarios y respuestas.
+      const idsAutores = [...new Set([
+        ...remotos.map(p=>p.user_id),
+        ...comentarios.map(c=>c.user_id)
+      ].filter(Boolean))];
+      const aliasPorUsuario = Object.create(null);
+      if (idsAutores.length) {
+        try {
+          const perfiles = await db.from("chat_profiles").select("user_id,alias").in("user_id", idsAutores);
+          if (perfiles.error) throw perfiles.error;
+          (perfiles.data || []).forEach(perfil => { aliasPorUsuario[perfil.user_id] = perfil.alias; });
+        } catch (errorAlias) {
+          console.warn("No se pudieron cargar los alias; se mostrarán autores anónimos.", errorAlias);
+        }
+      }
+
       let likesComentarios = [];
       const idsComentarios = comentarios.map(c=>c.id);
       if (idsComentarios.length) {
@@ -220,6 +236,7 @@
         return {
           id:p.id,
           autorId:p.user_id || null,
+          autorAlias:aliasPorUsuario[p.user_id] || null,
           grupoId:p.school_id || null,
           tipo:p.school_id ? "grupo" : "publico",
           titulo:p.title || contenido.titulo || "",
@@ -232,6 +249,7 @@
             const likesComentario = likesComentarios.filter(l=>String(l.comment_id)===String(c.id));
             return {
               ...c,
+              autorAlias:aliasPorUsuario[c.user_id] || null,
               likes:likesComentario.length,
               liked:likesComentario.some(l=>l.user_id===usuario.id)
             };
@@ -695,7 +713,7 @@ $("#postImage")?.addEventListener("change", ev => {
     item.className="comment-item";
     const autor=document.createElement("strong");
     autor.className="comment-author";
-    autor.textContent="🎭 Anónimo";
+    autor.textContent=comentario.autorAlias ? "@"+comentario.autorAlias : "🎭 Anónimo";
     const insigniaComentario=etiquetasDeAutor(comentario.user_id)[0];
     if (insigniaComentario) {
       const insignia=document.createElement("span");
@@ -806,7 +824,7 @@ $("#postImage")?.addEventListener("change", ev => {
     const identidad=document.createElement("div");
     const autor=document.createElement("div");
     autor.className="post-author";
-    autor.textContent="Publicado por Anónimo";
+    autor.textContent=post.autorAlias ? "Publicado por @"+post.autorAlias : "Publicado por Anónimo";
     const etiquetasAutor = document.createElement("span");
     etiquetasAutor.className="author-achievement-tags";
     etiquetasDeAutor(post.autorId).forEach(item=>{
@@ -1171,8 +1189,14 @@ $("#postImage")?.addEventListener("change", ev => {
   $("#chatAliasForm")?.addEventListener("submit", async ev => {
     ev.preventDefault();
     const alias = $("#chatAliasInput").value.trim();
-    if (!/^[A-Za-z0-9_]{3,20}$/.test(alias)) {
-      $("#chatAliasStatus").textContent = "Usá de 3 a 20 letras, números o guion bajo.";
+    const aliasNormalizado = normalizar(alias);
+    const nombresPersonales = ["ana","anabel","andrea","angela","angeles","antonia","antonio","ariel","azul","beatriz","belen","benjamin","brenda","bruno","camila","carla","carlos","catalina","ceci","cecilia","celeste","cesar","clara","claudia","daniel","daniela","david","diego","dolores","eduardo","elena","emilia","emiliano","emma","enrique","eric","ernesto","esteban","evelyn","fabian","facundo","felipe","fernanda","fernando","florencia","francisco","franco","gabriel","gabriela","gael","genesis","gerardo","gisela","gloria","graciela","guadalupe","guillermo","gustavo","hector","hernan","ignacio","ines","irene","isabel","ivan","jacinto","jaime","javier","jazmin","jesica","joaquin","jorge","jose","juan","julia","julian","julio","karen","karina","kevin","laura","lautaro","leandro","leo","leonardo","lilia","liliana","lola","lorena","lucas","lucia","luciana","luciano","luisa","luis","luz","magali","manuel","marcela","marco","maria","mariana","mariano","marina","mario","martin","mateo","matias","mauricio","melina","melissa","micaela","miguel","milagros","mirta","monica","nahuel","natalia","nicolas","nicole","noelia","norma","octavio","olga","oscar","pablo","paloma","pamela","paola","patricia","paula","pedro","pili","pilar","ramiro","raul","renata","ricardo","rocio","rodrigo","rosa","roxana","sabrina","samuel","sandra","santino","santiago","sara","sebastian","sergio","silvia","sofia","sol","tamara","tatiana","thiago","tomas","valentina","valeria","vanesa","veronica","vicente","victoria","violeta","viviana","ximena","yanina","yolanda","zoe"];
+    if (!/^[A-Za-z0-9_]{3,8}$/.test(alias)) {
+      $("#chatAliasStatus").textContent = "Usá de 3 a 8 caracteres, sin espacios: solo letras, números o guion bajo.";
+      return;
+    }
+    if (nombresPersonales.includes(aliasNormalizado)) {
+      $("#chatAliasStatus").textContent = "Ese alias parece un nombre de persona. Elegí uno inventado, sin nombres propios.";
       return;
     }
     const boton = ev.submitter || $("#chatAliasForm button[type=submit]");
