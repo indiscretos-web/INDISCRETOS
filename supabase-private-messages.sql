@@ -70,7 +70,7 @@ begin
     perform cron.schedule(
       'indiscretos-delete-expired-messages',
       '*/10 * * * *',
-      $$delete from public.direct_messages where created_at <= now() - interval '1 hour';$$
+      $job$delete from public.direct_messages where created_at <= now() - interval '1 hour';$job$
     );
   end if;
 end
