@@ -1306,9 +1306,21 @@ $("#postImage")?.addEventListener("change", ev => {
         $("#chatAliasStatus").textContent = "Ese alias ya está ocupado. Probá con otro.";
         return;
       }
-      const guardado = await db.from("chat_profiles")
-        .upsert({user_id: usuario.id, alias}, {onConflict:"user_id"})
-        .select("user_id,alias").single();
+      // Evitar upsert: separar alta y modificación para que los errores de RLS sean claros.
+      const perfilPropio = await db.from("chat_profiles")
+        .select("user_id,alias").eq("user_id", usuario.id).maybeSingle();
+      if (perfilPropio.error) throw perfilPropio.error;
+
+      let guardado;
+      if (perfilPropio.data) {
+        guardado = await db.from("chat_profiles")
+          .update({alias}).eq("user_id", usuario.id)
+          .select("user_id,alias").single();
+      } else {
+        guardado = await db.from("chat_profiles")
+          .insert({user_id:usuario.id, alias})
+          .select("user_id,alias").single();
+      }
       if (guardado.error) {
         if (guardado.error.code === "23505") {
           $("#chatAliasStatus").textContent = "Ese alias ya está ocupado. Probá con otro.";
@@ -1327,8 +1339,10 @@ $("#postImage")?.addEventListener("change", ev => {
       dibujarChatsGuardados();
       avisar("¡Alias guardado!");
     } catch (error) {
-      console.error(error);
-      $("#chatAliasStatus").textContent = "No se pudo guardar. Verificá la configuración de Supabase.";
+      console.error("Error al guardar alias en Supabase:", error);
+      const codigo = error?.code ? " (" + error.code + ")" : "";
+      const detalle = error?.message || error?.details || "Error desconocido";
+      $("#chatAliasStatus").textContent = "No se pudo guardar" + codigo + ": " + detalle;
     } finally { boton.disabled = false; }
   });
   $("#chatChangeAlias")?.addEventListener("click", () => {
