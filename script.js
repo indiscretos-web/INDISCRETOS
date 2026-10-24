@@ -1866,9 +1866,13 @@ $("#postImage")?.addEventListener("change", ev => {
       let perfilRemitente = await db.from("chat_profiles")
         .select("user_id,alias").eq("user_id", remitente.id).maybeSingle();
       if (perfilRemitente.error) throw perfilRemitente.error;
+      if (!perfilRemitente.data && remitente.is_anonymous === false) {
+        // Una cuenta permanente nunca debe recibir un alias aleatorio si falta su perfil:
+        // eso puede ocultar una sesión/cuenta desincronizada y confundir al usuario.
+        throw new Error("La cuenta @" + (chatAliasActual || remitente.user_metadata?.alias || "actual") + " inició sesión, pero Supabase no encuentra su perfil de alias. No se creó ni cambió ningún alias. Cerrá sesión e ingresá otra vez con tu alias y contraseña.");
+      }
       if (!perfilRemitente.data) {
-        // Crear un alias solo para esta nueva identidad anónima; jamás reemplazar
-        // un perfil que ya existe en esta sesión.
+        // Crear un alias aleatorio únicamente para una sesión anónima nueva.
         const caracteres = "abcdefghjkmnpqrstuvwxyz23456789";
         let creado = null;
         let errorPerfil = null;
