@@ -409,7 +409,9 @@
     if (vista==="colegios") dibujarEscuelas();
     if (vista==="inicio") localStorage.setItem("indiscretos_feed_visitado","1");
     if (vista==="logros") dibujarLogros();
-    if (vista==="mensajes") iniciarMensajesPrivados();
+    if (vista==="mensajes") {
+      iniciarMensajesPrivados().then(() => refrescarBandejaCompleta());
+    }
   }
 
   document.querySelectorAll("[data-view]").forEach(b=>{
