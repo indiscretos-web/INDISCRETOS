@@ -1205,3 +1205,47 @@ body.thunder-theme .achievement-card {
     to { box-shadow: 0 0 24px rgba(91,220,255,.36); }
   }
 }
+
+
+/* Etiquetas de logros junto al nombre anónimo */
+.post-author {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.author-achievement-tags {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.author-achievement-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  font-size: 9px;
+  line-height: 1.4;
+  font-weight: 900;
+  letter-spacing: .25px;
+  white-space: nowrap;
+}
+
+.tag-aprendiz { color: #c9c5d4; background: #35313d; }
+.tag-recluta { color: #8fdcff; background: #16384b; }
+.tag-elite { color: #ffe08a; background: #4a3a14; }
+.tag-premium { color: #ff9cb4; background: #4a2030; }
+.tag-clase-c { color: #8fe8ff; background: #153c49; }
+.tag-clase-b { color: #9cf0bd; background: #163d2b; }
+.tag-clase-a { color: #ffc17b; background: #4a2d14; }
+.tag-absolute { color: #d9b2ff; background: #38234d; }
+.tag-trueno { color: #91efff; background: #082f62; box-shadow: 0 0 8px #19baff55; }
+
+.like-btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
