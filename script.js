@@ -12,6 +12,7 @@
   let datos = { grupoId: null, posts: [], reportes: [] };
   let fotoSeleccionada = "";
   let toastTimer;
+  const comentariosAbiertos = new Set();
 
   const escuelas = [
     { id:"rivadavia", nombre:'Colegio N° 1 D.E. 3 "Bernardino Rivadavia"', direccion:"Av. San Juan 1545, Constitución, CABA", mapa:"Av. San Juan 1545, Constitución, Ciudad Autónoma de Buenos Aires, Argentina" },
@@ -250,6 +251,8 @@
   }
 
   async function agregarComentario(postId, texto, parentCommentId = null) {
+    const posicionScroll = window.scrollY;
+    comentariosAbiertos.add(String(postId));
     await conectar();
     const contenido = String(texto || "").trim();
     if (!contenido) throw new Error("El comentario está vacío.");
@@ -266,6 +269,7 @@
     const r = await db.from("post_comments").insert(nuevoComentario);
     if (r.error) throw r.error;
     await cargarRemoto();
+    requestAnimationFrame(() => window.scrollTo({top:posicionScroll, behavior:"auto"}));
   }
 
   async function cambiarLikeComentario(comentario) {
@@ -804,15 +808,18 @@ $("#postImage")?.addEventListener("change", ev => {
     const tituloComentarios=document.createElement("button");
     tituloComentarios.type="button";
     tituloComentarios.className="comments-toggle";
-    tituloComentarios.textContent=`💬 Ver comentarios (${totalComentarios})`;
-    tituloComentarios.setAttribute("aria-expanded","false");
+    const comentariosAbiertosAhora = comentariosAbiertos.has(String(post.id));
+    tituloComentarios.textContent=`${comentariosAbiertosAhora?"💬 Ocultar comentarios":"💬 Ver comentarios"} (${totalComentarios})`;
+    tituloComentarios.setAttribute("aria-expanded",String(comentariosAbiertosAhora));
 
     const contenidoComentarios=document.createElement("div");
-    contenidoComentarios.className="comments-content hidden";
+    contenidoComentarios.className=`comments-content${comentariosAbiertosAhora?"":" hidden"}`;
     tituloComentarios.addEventListener("click",()=>{
       const abierto=!contenidoComentarios.classList.contains("hidden");
       contenidoComentarios.classList.toggle("hidden",abierto);
       tituloComentarios.setAttribute("aria-expanded",String(!abierto));
+      if (abierto) comentariosAbiertos.delete(String(post.id));
+      else comentariosAbiertos.add(String(post.id));
       tituloComentarios.textContent=`${abierto?"💬 Ver comentarios":"💬 Ocultar comentarios"} (${totalComentarios})`;
       if (!abierto) sonido("click");
     });
