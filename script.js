@@ -1283,6 +1283,143 @@ $("#postImage")?.addEventListener("change", ev => {
       if ($("#chatAliasStatus")) $("#chatAliasStatus").textContent = "No se pudo iniciar el chat. Revisá que hayas ejecutado el archivo supabase-private-messages.sql en Supabase.";
     }
   }
+  // Cuentas multiplataforma: alias como identificador y correo sintético reservado.
+  // Requiere desactivar la confirmación de email en Supabase porque no se pide un email real.
+  const correoDeAlias = alias => normalizar(alias) + "@indiscretos.invalid";
+
+  function validarAliasCuenta(alias) {
+    return /^[A-Za-z0-9_]{3,8}$/.test(alias);
+  }
+
+  async function refrescarChatTrasLogin(perfil) {
+    const verificacion = await db.auth.getUser();
+    if (verificacion.error) throw verificacion.error;
+    usuario = verificacion.data.user;
+    if (!usuario?.id) throw new Error("Supabase no devolvió una identidad válida.");
+    chatAliasActual = perfil.alias;
+    $("#chatOwnAlias").textContent = chatAliasActual;
+    $("#chatAccountAlias").value = chatAliasActual;
+    $("#chatAccountPassword").value = "";
+    $("#chatAccountStatus").textContent = "Sesión iniciada como @" + chatAliasActual + ". Tus mensajes se sincronizan con esta cuenta.";
+    mostrarAliasSetup(false);
+    $("#chatWorkspace").classList.remove("hidden");
+    leerChatsGuardados();
+    dibujarChatsGuardados();
+    await sincronizarChatsEntrantes();
+    if (chatInboxTimer) clearInterval(chatInboxTimer);
+    chatInboxTimer = setInterval(() => {
+      if (!document.hidden) sincronizarChatsEntrantes();
+    }, 10000);
+  }
+
+  $("#chatAccountLinkBtn")?.addEventListener("click", async () => {
+    const alias = $("#chatAccountAlias").value.trim();
+    const password = $("#chatAccountPassword").value;
+    const status = $("#chatAccountStatus");
+    const boton = $("#chatAccountLinkBtn");
+    if (!validarAliasCuenta(alias)) {
+      status.textContent = "El alias debe tener entre 3 y 8 caracteres: letras, números o guion bajo.";
+      return;
+    }
+    if (password.length < 8 || password.length > 72) {
+      status.textContent = "La contraseña debe tener entre 8 y 72 caracteres.";
+      return;
+    }
+    boton.disabled = true;
+    try {
+      await conectar();
+      const verificada = await db.auth.getUser();
+      if (verificada.error) throw verificada.error;
+      const user = verificada.data.user;
+      if (!user?.id) throw new Error("No hay una sesión válida. Recargá la página e intentá de nuevo.");
+
+      const perfilActual = await db.from("chat_profiles")
+        .select("user_id,alias").eq("user_id", user.id).maybeSingle();
+      if (perfilActual.error) throw perfilActual.error;
+      const aliasOcupado = await db.from("chat_profiles")
+        .select("user_id,alias").ilike("alias", alias).maybeSingle();
+      if (aliasOcupado.error) throw aliasOcupado.error;
+      if (aliasOcupado.data && aliasOcupado.data.user_id !== user.id) {
+        throw new Error("Ese alias ya pertenece a otra cuenta. Elegí tu alias actual.");
+      }
+
+      let perfil = perfilActual.data;
+      if (perfil && perfil.alias.toLowerCase() !== alias.toLowerCase()) {
+        throw new Error("Para conservar tus mensajes, escribí exactamente tu alias actual: @" + perfil.alias + ".");
+      }
+      if (!perfil) {
+        const alta = await db.from("chat_profiles")
+          .insert({user_id:user.id, alias})
+          .select("user_id,alias").single();
+        if (alta.error) throw alta.error;
+        perfil = alta.data;
+      }
+
+      const vinculacion = await db.auth.updateUser({
+        email: correoDeAlias(perfil.alias),
+        password
+      });
+      if (vinculacion.error) throw vinculacion.error;
+      usuario = vinculacion.data.user || user;
+      chatAliasActual = perfil.alias;
+      $("#chatOwnAlias").textContent = chatAliasActual;
+      $("#chatAccountAlias").value = chatAliasActual;
+      $("#chatAccountPassword").value = "";
+      status.textContent = "¡Listo! @" + chatAliasActual + " ya tiene contraseña. Usá ese alias y esa contraseña en el otro dispositivo.";
+      avisar("Cuenta vinculada. Tus mensajes conservan la misma identidad.");
+    } catch (error) {
+      console.error("No se pudo vincular la cuenta:", error);
+      status.textContent = error?.message || "No se pudo crear la cuenta. Revisá la configuración de Email en Supabase.";
+    } finally {
+      boton.disabled = false;
+    }
+  });
+
+  $("#chatAccountForm")?.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const alias = $("#chatAccountAlias").value.trim();
+    const password = $("#chatAccountPassword").value;
+    const status = $("#chatAccountStatus");
+    const boton = $("#chatAccountLoginBtn");
+    if (!validarAliasCuenta(alias)) {
+      status.textContent = "El alias debe tener entre 3 y 8 caracteres: letras, números o guion bajo.";
+      return;
+    }
+    if (password.length < 8 || password.length > 72) {
+      status.textContent = "La contraseña debe tener entre 8 y 72 caracteres.";
+      return;
+    }
+    boton.disabled = true;
+    try {
+      await conectar();
+      const ingreso = await db.auth.signInWithPassword({
+        email: correoDeAlias(alias),
+        password
+      });
+      if (ingreso.error) throw new Error("No pudimos iniciar sesión. Revisá el alias y la contraseña.");
+      usuario = ingreso.data.user;
+
+      const resultadoPerfil = await db.from("chat_profiles")
+        .select("user_id,alias").eq("user_id", usuario.id).maybeSingle();
+      if (resultadoPerfil.error) throw resultadoPerfil.error;
+      let perfil = resultadoPerfil.data;
+      if (!perfil) {
+        const alta = await db.from("chat_profiles")
+          .insert({user_id:usuario.id, alias})
+          .select("user_id,alias").single();
+        if (alta.error) throw alta.error;
+        perfil = alta.data;
+      }
+      await refrescarChatTrasLogin(perfil);
+      avisar("Sesión iniciada. Ya estás conectado a tu cuenta.");
+    } catch (error) {
+      console.error("Error al iniciar sesión:", error);
+      status.textContent = error?.message || "No se pudo iniciar sesión.";
+    } finally {
+      boton.disabled = false;
+    }
+  });
+
   $("#chatAliasForm")?.addEventListener("submit", async ev => {
     ev.preventDefault();
     const alias = $("#chatAliasInput").value.trim();
