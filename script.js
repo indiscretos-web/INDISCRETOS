@@ -152,7 +152,14 @@
 
       // Reutilizar el cliente de Indiscretos en vez de crear instancias concurrentes.
       db = window.__indiscretosSupabaseClient ||
-        window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+        window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{
+          auth:{
+            persistSession:true,
+            autoRefreshToken:true,
+            detectSessionInUrl:false,
+            storageKey:"sb-akrwawkfazuopkxxitzs-auth-token"
+          }
+        });
       window.__indiscretosSupabaseClient = db;
 
       const sesion = await db.auth.getSession();
@@ -1243,8 +1250,33 @@ $("#postImage")?.addEventListener("change", ev => {
           if (!document.hidden) sincronizarChatsEntrantes();
         }, 10000);
       } else {
+        // Si el usuario no tiene alias, crear uno automáticamente para que pueda usar el chat
+        // sin tener que repetir el formulario. La sesión se conserva en el mismo almacenamiento.
         if (chatInboxTimer) clearInterval(chatInboxTimer);
-        mostrarAliasSetup(true);
+        let perfilCreado = null;
+        let ultimoError = null;
+        const caracteres = "abcdefghjkmnpqrstuvwxyz23456789";
+        for (let intento = 0; intento < 8 && !perfilCreado; intento++) {
+          let aliasNuevo = "chat";
+          for (let i = 0; i < 4; i++) aliasNuevo += caracteres[Math.floor(Math.random() * caracteres.length)];
+          const alta = await db.from("chat_profiles")
+            .insert({user_id:usuario.id, alias:aliasNuevo})
+            .select("user_id,alias").single();
+          if (!alta.error) {
+            perfilCreado = alta.data;
+          } else {
+            ultimoError = alta.error;
+            if (alta.error.code !== "23505") break;
+          }
+        }
+        if (!perfilCreado) throw ultimoError || new Error("No se pudo crear el alias automático.");
+        chatAliasActual = perfilCreado.alias;
+        $("#chatOwnAlias").textContent = chatAliasActual;
+        $("#chatAliasStatus").textContent = "";
+        mostrarAliasSetup(false);
+        leerChatsGuardados();
+        dibujarChatsGuardados();
+        avisar("Tu alias automático es @" + chatAliasActual);
       }
     } catch (error) {
       console.error("Mensajes privados:", error);
