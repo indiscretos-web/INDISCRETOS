@@ -60,7 +60,7 @@ create policy "Enviar mensaje como uno mismo"
     and char_length(trim(content)) between 1 and 1000
   );
 
--- El historial se oculta al cumplir una hora y se elimina físicamente cada 10 minutos.
+-- El historial se oculta al cumplir una hora y se elimina físicamente cada minuto.
 -- Si pg_cron no está habilitado en el proyecto, activarlo desde Supabase > Database > Extensions.
 create extension if not exists pg_cron;
 
