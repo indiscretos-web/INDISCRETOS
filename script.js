@@ -1242,6 +1242,7 @@ $("#postImage")?.addEventListener("change", ev => {
       if (r.data) {
         chatAliasActual = r.data.alias;
         $("#chatOwnAlias").textContent = chatAliasActual;
+        if ($("#chatAccountAlias")) $("#chatAccountAlias").value = chatAliasActual;
         mostrarAliasSetup(false);
         await sincronizarChatsEntrantes();
         dibujarChatsGuardados();
@@ -1272,6 +1273,7 @@ $("#postImage")?.addEventListener("change", ev => {
         if (!perfilCreado) throw ultimoError || new Error("No se pudo crear el alias automático.");
         chatAliasActual = perfilCreado.alias;
         $("#chatOwnAlias").textContent = chatAliasActual;
+        if ($("#chatAccountAlias")) $("#chatAccountAlias").value = chatAliasActual;
         $("#chatAliasStatus").textContent = "";
         mostrarAliasSetup(false);
         leerChatsGuardados();
@@ -1483,6 +1485,10 @@ $("#postImage")?.addEventListener("change", ev => {
     } finally { boton.disabled = false; }
   });
   $("#chatChangeAlias")?.addEventListener("click", () => {
+    if (usuario && usuario.is_anonymous === false) {
+      avisar("Para no perder el acceso desde otros dispositivos, por ahora no cambies el alias de una cuenta con contraseña.");
+      return;
+    }
     $("#chatAliasInput").value = chatAliasActual;
     mostrarAliasSetup(true);
   });
