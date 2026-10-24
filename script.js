@@ -1239,11 +1239,19 @@ $("#postImage")?.addEventListener("change", ev => {
       const r = await db.from("chat_profiles").select("user_id,alias").eq("user_id", usuario.id).maybeSingle();
       if (r.error) throw r.error;
       leerChatsGuardados();
+      const panel = $("#chatAccountPanel");
+      const permanente = usuario && usuario.is_anonymous === false;
       if (r.data) {
         chatAliasActual = r.data.alias;
         $("#chatOwnAlias").textContent = chatAliasActual;
         if ($("#chatAccountAlias")) $("#chatAccountAlias").value = chatAliasActual;
+      }
+      // Primero se crea/vincula una cuenta o se inicia sesión. No generar alias ni abrir chats
+      // automáticamente para visitantes anónimos.
+      if (permanente && r.data) {
+        panel?.classList.add("hidden");
         mostrarAliasSetup(false);
+        $("#chatWorkspace")?.classList.remove("hidden");
         await sincronizarChatsEntrantes();
         dibujarChatsGuardados();
         if (chatInboxTimer) clearInterval(chatInboxTimer);
@@ -1251,38 +1259,15 @@ $("#postImage")?.addEventListener("change", ev => {
           if (!document.hidden) sincronizarChatsEntrantes();
         }, 10000);
       } else {
-        // Si el usuario no tiene alias, crear uno automáticamente para que pueda usar el chat
-        // sin tener que repetir el formulario. La sesión se conserva en el mismo almacenamiento.
+        panel?.classList.remove("hidden");
+        $("#chatWorkspace")?.classList.add("hidden");
+        $("#chatAliasSetup")?.classList.add("hidden");
         if (chatInboxTimer) clearInterval(chatInboxTimer);
-        let perfilCreado = null;
-        let ultimoError = null;
-        const caracteres = "abcdefghjkmnpqrstuvwxyz23456789";
-        for (let intento = 0; intento < 8 && !perfilCreado; intento++) {
-          let aliasNuevo = "chat";
-          for (let i = 0; i < 4; i++) aliasNuevo += caracteres[Math.floor(Math.random() * caracteres.length)];
-          const alta = await db.from("chat_profiles")
-            .insert({user_id:usuario.id, alias:aliasNuevo})
-            .select("user_id,alias").single();
-          if (!alta.error) {
-            perfilCreado = alta.data;
-          } else {
-            ultimoError = alta.error;
-            if (alta.error.code !== "23505") break;
-          }
-        }
-        if (!perfilCreado) throw ultimoError || new Error("No se pudo crear el alias automático.");
-        chatAliasActual = perfilCreado.alias;
-        $("#chatOwnAlias").textContent = chatAliasActual;
-        if ($("#chatAccountAlias")) $("#chatAccountAlias").value = chatAliasActual;
-        $("#chatAliasStatus").textContent = "";
-        mostrarAliasSetup(false);
-        leerChatsGuardados();
-        dibujarChatsGuardados();
-        avisar("Tu alias automático es @" + chatAliasActual);
       }
     } catch (error) {
       console.error("Mensajes privados:", error);
-      if ($("#chatAliasStatus")) $("#chatAliasStatus").textContent = "No se pudo iniciar el chat. Revisá que hayas ejecutado el archivo supabase-private-messages.sql en Supabase.";
+      if ($("#chatAccountStatus")) $("#chatAccountStatus").textContent =
+        "No se pudo preparar el acceso: " + (error?.message || "revisá la configuración de Supabase.");
     }
   }
   // Cuentas multiplataforma: alias como identificador y correo sintético reservado.
@@ -1303,6 +1288,7 @@ $("#postImage")?.addEventListener("change", ev => {
     $("#chatAccountAlias").value = chatAliasActual;
     $("#chatAccountPassword").value = "";
     $("#chatAccountStatus").textContent = "Sesión iniciada como @" + chatAliasActual + ". Tus mensajes se sincronizan con esta cuenta.";
+    $("#chatAccountPanel")?.classList.add("hidden");
     mostrarAliasSetup(false);
     $("#chatWorkspace").classList.remove("hidden");
     leerChatsGuardados();
@@ -1368,6 +1354,8 @@ $("#postImage")?.addEventListener("change", ev => {
       $("#chatAccountAlias").value = chatAliasActual;
       $("#chatAccountPassword").value = "";
       status.textContent = "¡Listo! @" + chatAliasActual + " ya tiene contraseña. Usá ese alias y esa contraseña en el otro dispositivo.";
+      await refrescarChatTrasLogin(perfil);
+      $("#chatAccountPanel")?.classList.add("hidden");
       avisar("Cuenta vinculada. Tus mensajes conservan la misma identidad.");
     } catch (error) {
       console.error("No se pudo vincular la cuenta:", error);
@@ -1398,7 +1386,13 @@ $("#postImage")?.addEventListener("change", ev => {
         email: correoDeAlias(alias),
         password
       });
-      if (ingreso.error) throw new Error("No pudimos iniciar sesión. Revisá el alias y la contraseña.");
+      if (ingreso.error) {
+        console.error("Supabase rechazó el inicio de sesión:", ingreso.error);
+        const mensaje = ingreso.error.message || "";
+        if (/email not confirmed/i.test(mensaje)) throw new Error("La cuenta existe, pero Supabase todavía no confirmó el email interno. En Auth → Providers → Email, desactivá Confirm email y volvé a vincular la cuenta desde el dispositivo donde la creaste.");
+        if (/invalid login credentials/i.test(mensaje)) throw new Error("Supabase no encuentra una cuenta válida con ese alias y contraseña. Puede que solo se haya creado el perfil en chat_profiles y no la cuenta de acceso. Volvé al dispositivo donde la creaste y tocá Crear / vincular contraseña; después probá otra vez.");
+        throw new Error("Supabase: " + mensaje);
+      }
       usuario = ingreso.data.user;
 
       const resultadoPerfil = await db.from("chat_profiles")
