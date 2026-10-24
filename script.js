@@ -1492,20 +1492,35 @@ $("#postImage")?.addEventListener("change", ev => {
       if (perfil && perfil.alias.toLowerCase() !== alias.toLowerCase()) {
         throw new Error("Para conservar tus mensajes, escribí exactamente tu alias actual: @" + perfil.alias + ".");
       }
-      if (!perfil) {
-        const alta = await db.from("chat_profiles")
-          .insert({user_id:user.id, alias})
-          .select("user_id,alias").single();
-        if (alta.error) throw alta.error;
-        perfil = alta.data;
-      }
 
+      // Primero convertir la sesión anónima en una cuenta permanente y renovar
+      // la identidad verificada antes de intentar insertar el perfil.
       const vinculacion = await db.auth.updateUser({
-        email: correoDeAlias(perfil.alias),
+        email: correoDeAlias(alias),
         password
       });
       if (vinculacion.error) throw vinculacion.error;
-      usuario = vinculacion.data.user || user;
+
+      const verificacionFinal = await db.auth.getUser();
+      if (verificacionFinal.error) throw verificacionFinal.error;
+      const usuarioFinal = verificacionFinal.data?.user;
+      if (!usuarioFinal?.id || usuarioFinal.id !== user.id) {
+        throw new Error("La sesión cambió durante la vinculación. Recargá Indiscretos con Ctrl+F5 e intentá de nuevo.");
+      }
+      usuario = usuarioFinal;
+
+      if (!perfil) {
+        const alta = await db.from("chat_profiles")
+          .insert({user_id:usuarioFinal.id, alias})
+          .select("user_id,alias").single();
+        if (alta.error) {
+          if (alta.error.code === "42501") {
+            throw new Error("Supabase rechazó crear el perfil incluso después de validar la cuenta. La sesión es correcta, pero hay que corregir la política INSERT de chat_profiles en Supabase.");
+          }
+          throw alta.error;
+        }
+        perfil = alta.data;
+      }
       chatAliasActual = perfil.alias;
       $("#chatOwnAlias").textContent = chatAliasActual;
       $("#chatAccountAlias").value = chatAliasActual;
