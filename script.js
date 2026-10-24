@@ -1212,16 +1212,22 @@ $("#postImage")?.addEventListener("change", ev => {
         estadoSync.textContent = "Cuenta @" + (chatAliasActual || "activa") + " · " + mensajes.length + " mensajes recientes detectados (" + recibidosAhora + " recibidos).";
         estadoSync.classList.remove("hidden");
       }
+      // Recalcular el contador desde los mensajes reales en cada sincronización.
+      // Normalizar UUID y fechas evita que diferencias de formato oculten el aviso en PC.
       Object.keys(mensajesSinLeerPorChat).forEach(id => delete mensajesSinLeerPorChat[id]);
+      const miId = String(usuario.id);
       mensajes.forEach(m => {
-        if (m.recipient_id !== usuario.id || !m.sender_id || m.sender_id === usuario.id) return;
-        const salaAbierta = m.sender_id === chatActivoId &&
+        const remitenteId = String(m.sender_id || "");
+        const destinatarioId = String(m.recipient_id || "");
+        if (destinatarioId !== miId || !remitenteId || remitenteId === miId) return;
+        const salaAbierta = remitenteId === String(chatActivoId || "") &&
           $("#view-mensajes") && !$("#view-mensajes").classList.contains("hidden") &&
           $("#chatRoom") && !$("#chatRoom").classList.contains("hidden") &&
           !document.hidden;
         if (salaAbierta) return;
-        if (Date.parse(m.created_at) > ultimaLecturaChat(m.sender_id)) {
-          mensajesSinLeerPorChat[m.sender_id] = (mensajesSinLeerPorChat[m.sender_id] || 0) + 1;
+        const fechaMensaje = Date.parse(m.created_at);
+        if (Number.isFinite(fechaMensaje) && fechaMensaje > ultimaLecturaChat(remitenteId)) {
+          mensajesSinLeerPorChat[remitenteId] = (mensajesSinLeerPorChat[remitenteId] || 0) + 1;
         }
       });
       actualizarContadorMensajes();
