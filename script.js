@@ -777,10 +777,22 @@ $("#postImage")?.addEventListener("change", ev => {
     const comentariosPost=post.comentarios || [];
     const arbolComentarios=construirArbolComentarios(comentariosPost);
     const contarComentarios = lista => lista.reduce((n,c)=>n+1+contarComentarios(c.respuestas || []),0);
-    const tituloComentarios=document.createElement("h4");
-    tituloComentarios.className="comments-title";
-    tituloComentarios.textContent=`💬 Comentarios (${contarComentarios(arbolComentarios)})`;
-    zonaComentarios.append(tituloComentarios);
+    const totalComentarios=contarComentarios(arbolComentarios);
+    const tituloComentarios=document.createElement("button");
+    tituloComentarios.type="button";
+    tituloComentarios.className="comments-toggle";
+    tituloComentarios.textContent=`💬 Ver comentarios (${totalComentarios})`;
+    tituloComentarios.setAttribute("aria-expanded","false");
+
+    const contenidoComentarios=document.createElement("div");
+    contenidoComentarios.className="comments-content hidden";
+    tituloComentarios.addEventListener("click",()=>{
+      const abierto=!contenidoComentarios.classList.contains("hidden");
+      contenidoComentarios.classList.toggle("hidden",abierto);
+      tituloComentarios.setAttribute("aria-expanded",String(!abierto));
+      tituloComentarios.textContent=`${abierto?"💬 Ver comentarios":"💬 Ocultar comentarios"} (${totalComentarios})`;
+      if (!abierto) sonido("click");
+    });
 
     const listaComentarios=document.createElement("div");
     listaComentarios.className="comments-list";
@@ -792,8 +804,9 @@ $("#postImage")?.addEventListener("change", ev => {
     } else {
       arbolComentarios.forEach(c=>listaComentarios.append(dibujarComentario(c,post.id)));
     }
-    zonaComentarios.append(listaComentarios);
-    zonaComentarios.append(crearFormularioComentario(post.id,null));
+    contenidoComentarios.append(listaComentarios);
+    contenidoComentarios.append(crearFormularioComentario(post.id,null));
+    zonaComentarios.append(tituloComentarios,contenidoComentarios);
     articulo.append(zonaComentarios);
     return articulo;
   }
