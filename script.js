@@ -1368,8 +1368,9 @@ $("#postImage")?.addEventListener("change", ev => {
       $("#chatMessageInput").value = "";
       await actualizarMensajesChat();
     } catch (error) {
-      console.error(error);
-      avisar("No se pudo enviar. Revisá la configuración de Supabase.");
+      console.error("Error al enviar mensaje privado:", error);
+      const detalle = [error?.code, error?.message, error?.details, error?.hint].filter(Boolean).join(" — ");
+      avisar(detalle ? "Error de Supabase: " + detalle.slice(0, 180) : "No se pudo enviar. Abrí la consola (F12) para ver el error.");
     } finally { boton.disabled = false; }
   });
   $("#chatRenameBtn")?.addEventListener("click", () => {
