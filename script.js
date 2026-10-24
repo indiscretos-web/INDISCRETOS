@@ -1207,6 +1207,12 @@ $("#postImage")?.addEventListener("change", ev => {
       if (recibidos.error) throw recibidos.error;
 
       const mensajes = recibidos.data || [];
+      const estadoSync = $("#chatSyncStatus");
+      if (estadoSync && usuario?.is_anonymous === false) {
+        const recibidosAhora = mensajes.filter(m => m.recipient_id === usuario.id && m.sender_id !== usuario.id).length;
+        estadoSync.textContent = "Cuenta @" + (chatAliasActual || "activa") + " · " + mensajes.length + " mensajes recientes detectados (" + recibidosAhora + " recibidos).";
+        estadoSync.classList.remove("hidden");
+      }
       Object.keys(mensajesSinLeerPorChat).forEach(id => delete mensajesSinLeerPorChat[id]);
       mensajes.forEach(m => {
         if (m.recipient_id !== usuario.id || !m.sender_id || m.sender_id === usuario.id) return;
@@ -1249,10 +1255,11 @@ $("#postImage")?.addEventListener("change", ev => {
       }
     } catch (error) {
       console.warn("No se pudieron revisar los mensajes recibidos:", error);
-      const estado = $("#chatAccountStatus");
+      const estado = $("#chatSyncStatus");
       if (estado && usuario?.is_anonymous === false) {
         const detalle = [error?.code, error?.message, error?.details, error?.hint].filter(Boolean).join(" — ");
-        estado.textContent = "No se pudieron sincronizar los mensajes: " + (detalle || "error de conexión con Supabase");
+        estado.textContent = "Error al sincronizar @" + (chatAliasActual || "tu cuenta") + ": " + (detalle || "error de conexión con Supabase");
+        estado.classList.remove("hidden");
       }
     }
   }
