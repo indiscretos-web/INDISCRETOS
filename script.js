@@ -1249,6 +1249,11 @@ $("#postImage")?.addEventListener("change", ev => {
       }
     } catch (error) {
       console.warn("No se pudieron revisar los mensajes recibidos:", error);
+      const estado = $("#chatAccountStatus");
+      if (estado && usuario?.is_anonymous === false) {
+        const detalle = [error?.code, error?.message, error?.details, error?.hint].filter(Boolean).join(" — ");
+        estado.textContent = "No se pudieron sincronizar los mensajes: " + (detalle || "error de conexión con Supabase");
+      }
     }
   }
 
@@ -1692,7 +1697,8 @@ $("#postImage")?.addEventListener("change", ev => {
       }
     } catch (error) {
       console.error("Mensajes:", error);
-      cont.innerHTML = '<p class="tiny-note">No se pudieron cargar los mensajes. Revisá la configuración de Supabase.</p>';
+      const detalle = [error?.code, error?.message, error?.details, error?.hint].filter(Boolean).join(" — ");
+      cont.textContent = "No se pudieron cargar los mensajes: " + (detalle || "error de conexión con Supabase");
     }
   }
   $("#chatSendForm")?.addEventListener("submit", async ev => {
