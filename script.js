@@ -1831,7 +1831,12 @@ $("#postImage")?.addEventListener("change", ev => {
       if (sesionActual.error) throw sesionActual.error;
 
       if (!sesionActual.data?.session?.access_token) {
-        throw new Error("Tu sesión de mensajes no está activa. Iniciá sesión con tu alias y contraseña antes de enviar; el texto quedó guardado.");
+        // Los visitantes pueden usar Mensajes con una sesión anónima propia.
+        // Esto no inicia sesión como otra cuenta ni modifica perfiles existentes.
+        const nuevaSesion = await db.auth.signInAnonymously();
+        if (nuevaSesion.error) throw nuevaSesion.error;
+        sesionActual = await db.auth.getSession();
+        if (sesionActual.error) throw sesionActual.error;
       }
 
       // getUser valida el token contra el servidor de Supabase.
@@ -1858,7 +1863,25 @@ $("#postImage")?.addEventListener("change", ev => {
         .select("user_id,alias").eq("user_id", remitente.id).maybeSingle();
       if (perfilRemitente.error) throw perfilRemitente.error;
       if (!perfilRemitente.data) {
-        throw new Error("Esta sesión no tiene un alias de mensajes vinculado. Iniciá sesión con tu alias y contraseña; no se va a crear ni cambiar ningún alias automáticamente y tu mensaje sigue escrito.");
+        // Crear un alias solo para esta nueva identidad anónima; jamás reemplazar
+        // un perfil que ya existe en esta sesión.
+        const caracteres = "abcdefghjkmnpqrstuvwxyz23456789";
+        let creado = null;
+        let errorPerfil = null;
+        for (let intento = 0; intento < 8 && !creado; intento++) {
+          let aliasNuevo = "chat";
+          for (let i = 0; i < 4; i++) aliasNuevo += caracteres[Math.floor(Math.random() * caracteres.length)];
+          const alta = await db.from("chat_profiles")
+            .insert({user_id:remitente.id, alias:aliasNuevo})
+            .select("user_id,alias").single();
+          if (!alta.error) creado = alta.data;
+          else {
+            errorPerfil = alta.error;
+            if (alta.error.code !== "23505") break;
+          }
+        }
+        if (!creado) throw errorPerfil || new Error("No se pudo crear el perfil para esta sesión.");
+        perfilRemitente = {data:creado,error:null};
       }
       chatAliasActual = perfilRemitente.data.alias;
       if ($("#chatOwnAlias")) $("#chatOwnAlias").textContent = chatAliasActual;
