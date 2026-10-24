@@ -75,3 +75,14 @@ begin
   end if;
 end
 $$;
+
+
+-- Reglas nuevas para alias: 3 a 8 caracteres, sin espacios ni nombres comunes.
+-- NOT VALID conserva los alias viejos existentes, pero valida los alias nuevos y los cambios.
+alter table public.chat_profiles drop constraint if exists chat_profiles_alias_rules;
+alter table public.chat_profiles
+  add constraint chat_profiles_alias_rules
+  check (
+    alias ~ '^[A-Za-z0-9_]{3,8}$'
+    and lower(alias) not in ('ana', 'anabel', 'andrea', 'angela', 'angeles', 'antonia', 'antonio', 'ariel', 'azul', 'beatriz', 'belen', 'benjamin', 'brenda', 'bruno', 'camila', 'carla', 'carlos', 'catalina', 'ceci', 'cecilia', 'celeste', 'cesar', 'clara', 'claudia', 'daniel', 'daniela', 'david', 'diego', 'dolores', 'eduardo', 'elena', 'emilia', 'emiliano', 'emma', 'enrique', 'eric', 'ernesto', 'esteban', 'evelyn', 'fabian', 'facundo', 'felipe', 'fernanda', 'fernando', 'florencia', 'francisco', 'franco', 'gabriel', 'gabriela', 'gael', 'genesis', 'gerardo', 'gisela', 'gloria', 'graciela', 'guadalupe', 'guillermo', 'gustavo', 'hector', 'hernan', 'ignacio', 'ines', 'irene', 'isabel', 'ivan', 'jacinto', 'jaime', 'javier', 'jazmin', 'jesica', 'joaquin', 'jorge', 'jose', 'juan', 'julia', 'julian', 'julio', 'karen', 'karina', 'kevin', 'laura', 'lautaro', 'leandro', 'leo', 'leonardo', 'lilia', 'liliana', 'lola', 'lorena', 'lucas', 'lucia', 'luciana', 'luciano', 'luisa', 'luis', 'luz', 'magali', 'manuel', 'marcela', 'marco', 'maria', 'mariana', 'mariano', 'marina', 'mario', 'martin', 'mateo', 'matias', 'mauricio', 'melina', 'melissa', 'micaela', 'miguel', 'milagros', 'mirta', 'monica', 'nahuel', 'natalia', 'nicolas', 'nicole', 'noelia', 'norma', 'octavio', 'olga', 'oscar', 'pablo', 'paloma', 'pamela', 'paola', 'patricia', 'paula', 'pedro', 'pili', 'pilar', 'ramiro', 'raul', 'renata', 'ricardo', 'rocio', 'rodrigo', 'rosa', 'roxana', 'sabrina', 'samuel', 'sandra', 'santino', 'santiago', 'sara', 'sebastian', 'sergio', 'silvia', 'sofia', 'sol', 'tamara', 'tatiana', 'thiago', 'tomas', 'valentina', 'valeria', 'vanesa', 'veronica', 'vicente', 'victoria', 'violeta', 'viviana', 'ximena', 'yanina', 'yolanda', 'zoe')
+  ) not valid;
