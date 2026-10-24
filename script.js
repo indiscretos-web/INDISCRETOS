@@ -1296,6 +1296,18 @@ $("#postImage")?.addEventListener("change", ev => {
       cont.append(fila);
     });
   }
+  // Sincroniza la bandeja y, si hay una conversación abierta en pantalla, vuelve a cargarla.
+  // Esto mantiene la vista de la PC actualizada aunque el chat se haya abierto antes de recibir mensajes.
+  async function refrescarBandejaCompleta() {
+    if (document.hidden || !usuario || !db) return;
+    await sincronizarChatsEntrantes();
+    const mensajesVisible = $("#view-mensajes") && !$("#view-mensajes").classList.contains("hidden");
+    const salaVisible = $("#chatRoom") && !$("#chatRoom").classList.contains("hidden");
+    if (chatActivoId && mensajesVisible && salaVisible && !$("#chatMessageInput")?.value) {
+      await actualizarMensajesChat();
+    }
+  }
+
   async function iniciarMensajesPrivados() {
     try {
       await conectar();
@@ -1325,8 +1337,8 @@ $("#postImage")?.addEventListener("change", ev => {
         dibujarChatsGuardados();
         if (chatInboxTimer) clearInterval(chatInboxTimer);
         chatInboxTimer = setInterval(() => {
-          if (!document.hidden) sincronizarChatsEntrantes();
-        }, 10000);
+          if (!document.hidden) refrescarBandejaCompleta();
+        }, 5000);
       } else {
         panel?.classList.remove("hidden");
         $("#chatWorkspace")?.classList.add("hidden");
@@ -1366,8 +1378,8 @@ $("#postImage")?.addEventListener("change", ev => {
     await sincronizarChatsEntrantes();
     if (chatInboxTimer) clearInterval(chatInboxTimer);
     chatInboxTimer = setInterval(() => {
-      if (!document.hidden) sincronizarChatsEntrantes();
-    }, 10000);
+      if (!document.hidden) refrescarBandejaCompleta();
+    }, 5000);
   }
 
   $("#chatAccountLinkBtn")?.addEventListener("click", async () => {
