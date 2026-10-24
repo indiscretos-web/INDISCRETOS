@@ -1429,26 +1429,42 @@ $("#postImage")?.addEventListener("change", ev => {
     try {
       await conectar();
 
-      // Recuperar la sesión desde el mismo cliente usado para las consultas.
-      // Si expiró o se perdió, crear una sesión anónima nueva.
+      // Validar la identidad contra Auth, no confiar solo en la sesión guardada localmente.
+      // La política RLS exige que sender_id sea exactamente auth.uid().
       let sesionActual = await db.auth.getSession();
       if (sesionActual.error) throw sesionActual.error;
-      if (!sesionActual.data?.session?.user?.id) {
+
+      if (!sesionActual.data?.session?.access_token) {
         const nuevaSesion = await db.auth.signInAnonymously();
         if (nuevaSesion.error) throw nuevaSesion.error;
         sesionActual = await db.auth.getSession();
         if (sesionActual.error) throw sesionActual.error;
       }
-      const remitente = sesionActual.data?.session?.user;
-      if (!remitente?.id) throw new Error("Supabase no pudo iniciar una sesión anónima. Recargá la página e intentá de nuevo.");
+
+      // getUser valida el token contra el servidor de Supabase.
+      let identidadVerificada = await db.auth.getUser();
+      if (identidadVerificada.error) {
+        const refresco = await db.auth.refreshSession();
+        if (refresco.error) throw identidadVerificada.error;
+        identidadVerificada = await db.auth.getUser();
+        if (identidadVerificada.error) throw identidadVerificada.error;
+      }
+
+      const remitente = identidadVerificada.data?.user;
+      const idSesion = sesionActual.data?.session?.user?.id;
+      if (!remitente?.id) {
+        throw new Error("Supabase no pudo validar tu sesión. Recargá la página e intentá de nuevo.");
+      }
+      if (idSesion && idSesion !== remitente.id) {
+        throw new Error("La sesión guardada y la identidad validada no coinciden. Recargá Indiscretos con Ctrl+F5 e intentá de nuevo.");
+      }
       usuario = remitente;
 
-      // Comprobar que exista el perfil vinculado al usuario actual.
+      // Asegurar que el perfil de alias pertenece a esta identidad autenticada.
       let perfilRemitente = await db.from("chat_profiles")
         .select("user_id,alias").eq("user_id", remitente.id).maybeSingle();
       if (perfilRemitente.error) throw perfilRemitente.error;
       if (!perfilRemitente.data) {
-        // Crear un alias automático si la sesión cambió y el perfil anterior ya no corresponde.
         const caracteres = "abcdefghjkmnpqrstuvwxyz23456789";
         let creado = null;
         let errorPerfil = null;
