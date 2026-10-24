@@ -1139,20 +1139,16 @@ $("#postImage")?.addEventListener("change", ev => {
     catch (_) { avisar("No se pudieron guardar los chats en este navegador."); }
   }
   function limpiarMensajesVencidos(chatId) {
-    try {
-      const corte = Date.now() - CHAT_TTL_MS;
-      const lista = JSON.parse(localStorage.getItem(mensajesLocalKey(chatId)) || "[]");
-      localStorage.setItem(mensajesLocalKey(chatId), JSON.stringify((Array.isArray(lista) ? lista : []).filter(m => Date.parse(m.created_at) > corte)));
-    } catch (_) {}
+    // No borrar el historial: debe aparecer también en otros dispositivos.
+    // Se conserva la función para compatibilidad con las llamadas existentes.
   }
   function leerMensajesLocales(chatId) {
     limpiarMensajesVencidos(chatId);
     try { return JSON.parse(localStorage.getItem(mensajesLocalKey(chatId)) || "[]"); } catch (_) { return []; }
   }
   function guardarMensajesLocales(chatId, lista) {
-    const corte = Date.now() - CHAT_TTL_MS;
-    const vigentes = lista.filter(m => Date.parse(m.created_at) > corte);
-    try { localStorage.setItem(mensajesLocalKey(chatId), JSON.stringify(vigentes)); } catch (_) {}
+    // Guardar el historial completo; no ocultar mensajes por antigüedad.
+    try { localStorage.setItem(mensajesLocalKey(chatId), JSON.stringify(lista)); } catch (_) {}
   }
   function buscarChatGuardado(userId) {
     return chatsGuardados.find(c => c.userId === userId);
@@ -1686,14 +1682,13 @@ $("#postImage")?.addEventListener("change", ev => {
     if (!chat || !usuario) return;
     const cont = $("#chatMessages");
     try {
-      const corte = new Date(Date.now() - CHAT_TTL_MS).toISOString();
       const local = leerMensajesLocales(chat.userId);
       const r = await db.from("direct_messages").select("id,sender_id,recipient_id,content,created_at")
         .or("and(sender_id.eq." + usuario.id + ",recipient_id.eq." + chat.userId + "),and(sender_id.eq." + chat.userId + ",recipient_id.eq." + usuario.id + ")")
-        .gte("created_at", corte).order("created_at", {ascending:true}).limit(500);
+        .order("created_at", {ascending:true}).limit(1000);
       if (r.error) throw r.error;
       const unicos = new Map();
-      [...local, ...(r.data || [])].filter(m => Date.parse(m.created_at) > Date.now() - CHAT_TTL_MS).forEach(m => unicos.set(m.id, m));
+      [...local, ...(r.data || [])].forEach(m => unicos.set(m.id, m));
       const mensajes = [...unicos.values()].sort((a,b) => Date.parse(a.created_at)-Date.parse(b.created_at));
       guardarMensajesLocales(chat.userId, mensajes);
       const ultimoRecibido = mensajes
