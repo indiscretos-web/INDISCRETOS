@@ -129,6 +129,21 @@
       <!-- MENSAJES PRIVADOS -->
       <section class="view hidden" id="view-mensajes">
         <div class="page-heading"><span class="eyebrow">CONVERSACIONES PRIVADAS</span><h2>💬 Mensajes privados</h2><p>Los mensajes desaparecen después de una hora. Tus chats guardados permanecen en este navegador.</p></div>
+        <section class="card" id="chatAccountPanel">
+          <h3>Cuenta para usar en varios dispositivos</h3>
+          <p class="tiny-note">Usá el mismo alias y contraseña en el celular y la computadora. Elegí una contraseña de al menos 8 caracteres y no la compartas.</p>
+          <form id="chatAccountForm" class="chat-form">
+            <label for="chatAccountAlias">Alias (3 a 8 caracteres)</label>
+            <input id="chatAccountAlias" maxlength="8" minlength="3" pattern="[A-Za-z0-9_]{3,8}" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="Tu alias" required>
+            <label for="chatAccountPassword">Contraseña</label>
+            <input id="chatAccountPassword" type="password" minlength="8" maxlength="72" autocomplete="current-password" placeholder="Mínimo 8 caracteres" required>
+            <div class="chat-search-row">
+              <button class="primary-btn" id="chatAccountLinkBtn" type="button">Crear / vincular contraseña</button>
+              <button class="secondary-btn" id="chatAccountLoginBtn" type="submit">Iniciar sesión</button>
+            </div>
+          </form>
+          <p id="chatAccountStatus" class="tiny-note" role="status" aria-live="polite"></p>
+        </section>
         <section class="card" id="chatAliasSetup">
           <h3>Elegí tu alias único</h3><p class="tiny-note">Inventá un nombre de usuario: sin espacios, sin nombres de personas y con un máximo de 8 caracteres. No uses tu nombre real ni datos personales.</p>
           <form id="chatAliasForm" class="chat-form"><label for="chatAliasInput">Usuario (3 a 8 caracteres)</label><input id="chatAliasInput" maxlength="8" minlength="3" pattern="[A-Za-z0-9_]{3,8}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ejemplo: chisme7" required><button class="primary-btn" type="submit">Guardar alias</button></form>
@@ -152,6 +167,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="script.js?v=20261024-7"></script>
+  <script src="script.js?v=20261024-8"></script>
 </body>
 </html>
