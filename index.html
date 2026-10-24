@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#17121f">
   <title>Indiscretos</title>
-  <link rel="stylesheet" href="style.css?v=20261024-12">
+  <link rel="stylesheet" href="style.css?v=20261024-13">
 </head>
 <body>
   <!-- Pantalla de entrada automática. La imagen la vas a poner vos en img/ -->
@@ -28,7 +28,7 @@
         <button class="nav-leave-btn" id="navLeaveGroupBtn" type="button">Salir del colegio</button>
       </div>
       <button class="nav-btn" data-view="logros">🏆 Logros</button>
-      <button class="nav-btn" data-view="mensajes">💬 Mensajes</button>
+      <button class="nav-btn messages-nav-btn" id="messagesNavButton" data-view="mensajes"><span>💬 Mensajes</span><span class="message-count-badge hidden" id="messagesNavBadge" aria-label="0 mensajes sin leer">0</span></button>
     </nav>
 
     <main class="main-content">
@@ -168,6 +168,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="script.js?v=20261024-11"></script>
+  <script src="script.js?v=20261024-12"></script>
 </body>
 </html>
