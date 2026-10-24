@@ -165,7 +165,7 @@
         const [lr, crInicial] = await Promise.all([
           db.from("post_likes").select("post_id,user_id").in("post_id",ids),
           db.from("post_comments")
-            .select("id,post_id,user_id,content,created_at,parent_comment_id")
+            .select("id,post_id,user_id,content,created_at,parent_comment_id,school_id")
             .in("post_id",ids).order("created_at",{ascending:true})
         ]);
         if (lr.error) throw lr.error;
@@ -258,7 +258,8 @@
     const nuevoComentario = {
       post_id:postId,
       user_id:usuario.id,
-      content:contenido
+      content:contenido,
+      school_id:datos.grupoId || null
     };
     if (parentCommentId !== null) nuevoComentario.parent_comment_id = parentCommentId;
 
@@ -645,11 +646,19 @@ $("#postImage")?.addEventListener("change", ev => {
     item.className="comment-item";
     const autor=document.createElement("strong");
     autor.textContent="🎭 Anónimo";
+    item.append(autor);
+    const escuelaComentario=escuelaPorId(comentario.school_id);
+    if (escuelaComentario) {
+      const etiquetaEscuela=document.createElement("div");
+      etiquetaEscuela.className="school-tag";
+      etiquetaEscuela.textContent="🏫 "+escuelaComentario.nombre;
+      item.append(etiquetaEscuela);
+    }
     const texto=document.createElement("p");
     texto.textContent=comentario.content || "";
     const fecha=document.createElement("small");
     fecha.textContent=fechaBonita(comentario.created_at);
-    item.append(autor,texto,fecha);
+    item.append(texto,fecha);
 
     const acciones=document.createElement("div");
     acciones.className="comment-actions";
