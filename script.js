@@ -1379,7 +1379,6 @@ $("#postImage")?.addEventListener("change", ev => {
         // no desmontarlo por una lectura transitoria de sesión al volver desde otra vista.
         const workspaceActivo = Boolean(
           chatAliasActual &&
-          usuario?.is_anonymous === false &&
           $("#chatWorkspace") &&
           !$("#chatWorkspace").classList.contains("hidden")
         );
