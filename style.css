@@ -995,3 +995,56 @@ button:active, .upload-btn:active {
 .comment-replies .comment-item {
   background: #17121f;
 }
+
+
+/* Navegación simple: solo Feed, Elegir colegio y Logros */
+.layout {
+  grid-template-columns: 190px minmax(0, 1fr);
+  max-width: 1240px;
+}
+.sidebar {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.nav-btn {
+  margin: 0;
+  padding: 13px 12px;
+}
+#postForm.needs-school #postText {
+  cursor: pointer;
+}
+#postForm.needs-school .upload-btn {
+  opacity: .7;
+}
+#postForm.needs-school #postText:focus {
+  border-color: var(--yellow);
+}
+@media (max-width: 700px) {
+  .layout {
+    display: block;
+    padding: 12px;
+  }
+  .sidebar {
+    position: sticky;
+    z-index: 20;
+    top: 0;
+    display: flex;
+    gap: 6px;
+    margin: 0 0 14px;
+    padding: 7px;
+    overflow-x: auto;
+    background: var(--panel);
+  }
+  .nav-btn {
+    flex: 1 0 auto;
+    width: auto;
+    text-align: center;
+    padding: 10px 9px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}

@@ -161,30 +161,27 @@
       let comentarios = [];
 
       if (ids.length) {
-        const lr = await db.from("post_likes")
-          .select("post_id,user_id").in("post_id",ids);
+        // Likes y comentarios de publicaciones se consultan en paralelo para acelerar el primer render.
+        const [lr, crInicial] = await Promise.all([
+          db.from("post_likes").select("post_id,user_id").in("post_id",ids),
+          db.from("post_comments")
+            .select("id,post_id,user_id,content,created_at,parent_comment_id")
+            .in("post_id",ids).order("created_at",{ascending:true})
+        ]);
         if (lr.error) throw lr.error;
         likes = lr.data || [];
 
-        // Los comentarios son opcionales: si falta la tabla o sus políticas,
-        // no debemos bloquear la carga de todas las publicaciones.
-        try {
-          let cr = await db.from("post_comments")
-            .select("id,post_id,user_id,content,created_at,parent_comment_id")
-            .in("post_id",ids)
-            .order("created_at",{ascending:true});
-          if (cr.error) {
-            // Compatibilidad temporal mientras se ejecuta la migración de respuestas.
-            cr = await db.from("post_comments")
-              .select("id,post_id,user_id,content,created_at")
-              .in("post_id",ids)
-              .order("created_at",{ascending:true});
-          }
-          if (cr.error) throw cr.error;
+        let cr = crInicial;
+        // Compatibilidad con instalaciones que aún no tienen respuestas anidadas.
+        if (cr.error) {
+          cr = await db.from("post_comments")
+            .select("id,post_id,user_id,content,created_at")
+            .in("post_id",ids).order("created_at",{ascending:true});
+        }
+        if (cr.error) {
+          console.warn("Comentarios no disponibles; el muro seguirá cargando.", cr.error);
+        } else {
           comentarios = (cr.data || []).map(c=>({...c,parent_comment_id:c.parent_comment_id || null}));
-        } catch (errorComentarios) {
-          comentarios = [];
-          console.warn("Comentarios no disponibles; el muro seguirá cargando.", errorComentarios);
         }
       }
 
@@ -193,8 +190,7 @@
       if (idsComentarios.length) {
         try {
           const lcr = await db.from("post_comment_likes")
-            .select("comment_id,user_id")
-            .in("comment_id",idsComentarios);
+            .select("comment_id,user_id").in("comment_id",idsComentarios);
           if (lcr.error) throw lcr.error;
           likesComentarios = lcr.data || [];
         } catch (errorLikesComentarios) {
@@ -335,7 +331,6 @@
     });
     $("#sidebar")?.classList.remove("open");
     if (vista==="colegios") dibujarEscuelas();
-    if (vista==="grupo") dibujarGrupo();
     if (vista==="logros") dibujarLogros();
   }
 
@@ -347,23 +342,20 @@
     });
   });
 
-  $("#mobileMenu")?.addEventListener("click",()=>{
-    sonido("click");
-    $("#sidebar")?.classList.toggle("open");
-  });
-
   function actualizarGrupo() {
     const e=escuelaPorId(datos.grupoId);
     $("#myGroup").textContent=e ? `🏫 ${e.nombre}` : "Todavía no elegiste un grupo.";
-    $("#groupNotice")?.classList.toggle("hidden",Boolean(e));
-    $("#postText").disabled=!e;
+    $("#groupNotice")?.classList.add("hidden");
+    // El formulario permanece visible, pero cualquier intento sin colegio lleva a la selección.
+    $("#postText").readOnly=!e;
     $("#postImage").disabled=!e;
-    $("#publishBtn").disabled=!e;
+    $("#publishBtn").disabled=false;
     if ($("#postText")) {
       $("#postText").placeholder=e
         ? "Escribí algo para compartir con toda la comunidad..."
-        : "Primero entrá a un colegio para poder publicar...";
+        : "Unite a un colegio para interactuar en Indiscretos.";
     }
+    $("#postForm")?.classList.toggle("needs-school",!e);
     dibujarFeed();
   }
 
@@ -381,8 +373,10 @@
     dibujarEscuelas();
     dibujarGrupo();
     sonido("grupo");
-    avisar(`¡Entraste a ${e.nombre}!`);
-    cambiarVista("grupo");
+    avisar(`¡Te uniste a ${e.nombre}!`);
+    cambiarVista("inicio");
+    const mensaje=$("#schoolJoinNotice");
+    if (mensaje) mensaje.classList.add("hidden");
   }
 
   $("#changeGroupBtn")?.addEventListener("click",()=>{
@@ -482,12 +476,25 @@ $("#postImage")?.addEventListener("change", ev => {
     $("#charCount").textContent=`${$("#postText").value.length}/1000`;
   });
 
+  function pedirColegio() {
+    cambiarVista("colegios");
+    const mensaje=$("#schoolJoinNotice");
+    if (mensaje) {
+      mensaje.textContent="Unite a un colegio para interactuar en Indiscretos.";
+      mensaje.classList.remove("hidden");
+    }
+  }
+
+  $("#postForm")?.addEventListener("click",ev=>{
+    if (!tieneGrupo() && (ev.target.closest("#postText, #postImage, .upload-btn, #publishBtn, #postTitle"))) {
+      pedirColegio();
+    }
+  });
+
   $("#postForm")?.addEventListener("submit",async ev=>{
     ev.preventDefault();
     if (!tieneGrupo()) {
-      sonido("error");
-      avisar("Primero entrá a un colegio para poder publicar.");
-      cambiarVista("colegios");
+      pedirColegio();
       return;
     }
     const titulo=$("#postTitle").value.trim();
@@ -919,12 +926,14 @@ $("#postImage")?.addEventListener("change", ev => {
       // No redibujar el muro mientras alguien está escribiendo un comentario o respuesta:
       // el refresco reemplaza el DOM y podría borrar el borrador.
       setInterval(()=>{
-        const camposComentario = [...document.querySelectorAll(".comment-form textarea")];
-        const escribiendoComentario = camposComentario.some(campo =>
+        // Evita peticiones y repintados si la pestaña no se ve o alguien está escribiendo.
+        if (document.hidden) return;
+        const camposEditables = [...document.querySelectorAll(".comment-form textarea, #postText, #postTitle, .group-composer textarea, .group-composer input")];
+        const editando = camposEditables.some(campo =>
           campo === document.activeElement || campo.value.length > 0
         );
-        if (!escribiendoComentario) cargarRemoto(false);
-      },15000);
+        if (!editando) cargarRemoto(false);
+      },30000);
     } catch (error) {
       console.error(error);
       avisar("No se pudo conectar a Supabase. Revisá la configuración.");

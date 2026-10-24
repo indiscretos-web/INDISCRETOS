@@ -19,23 +19,12 @@
     </a>
   </header>
 
-  <div class="mobile-menu-row">
-    <button class="mobile-menu" id="mobileMenu" aria-label="Abrir menú">☰ Menú</button>
-  </div>
-
   <div class="layout">
-    <aside class="sidebar" id="sidebar">
-      <div class="side-title">MENÚ PRINCIPAL</div>
+    <nav class="sidebar" id="sidebar" aria-label="Navegación principal">
       <button class="nav-btn active" data-view="inicio">📰 Feed</button>
-      <button class="nav-btn" data-view="colegios">🏫 Colegios</button>
-      <button class="nav-btn" data-view="grupo">🔒 Mi grupo</button>
+      <button class="nav-btn" data-view="colegios">🏫 Elegir colegio</button>
       <button class="nav-btn" data-view="logros">🏆 Logros</button>
-
-      <div class="sidebar-divider"></div>
-      <div class="side-title">TU COMUNIDAD</div>
-      <p class="my-group" id="myGroup">Todavía no elegiste un grupo.</p>
-      <p class="sidebar-note">Elegí un colegio para participar en su muro privado.</p>
-    </aside>
+    </nav>
 
     <main class="main-content">
       <!-- FEED -->
@@ -64,7 +53,7 @@
           </div>
 
           <form id="postForm">
-            <p class="tiny-note" id="groupNotice">🔒 Primero elegí un colegio en la sección Colegios para poder publicar.</p>
+            <p class="tiny-note hidden" id="groupNotice">🔒 Uní tu colegio para poder publicar.</p>
             <label class="sr-only" for="postText">Tu mensaje</label>
             <textarea id="postText" maxlength="1000" placeholder="Escribí lo que quieras compartir con todos..." rows="4"></textarea>
 
@@ -98,7 +87,8 @@
         <div class="page-heading">
           <span class="eyebrow">ENCONTRÁ TU COMUNIDAD</span>
           <h2>🏫 Colegios</h2>
-          <p>Podés entrar a un solo grupo escolar. Los mensajes de ese grupo aparecen en Mi grupo y en el Feed general.</p>
+          <p>Elegí tu colegio para participar en Indiscretos.</p>
+          <div class="notice hidden" id="schoolJoinNotice" role="status" aria-live="polite">Unite a un colegio para interactuar en Indiscretos.</div>
         </div>
         <div class="card school-search">
           <label for="schoolSearch">Buscá tu colegio</label>
@@ -158,23 +148,6 @@
       </footer>
     </main>
 
-    <aside class="right-sidebar">
-      <section class="card side-card">
-        <div class="side-icon">🎭</div>
-        <h3>El anonimato primero</h3>
-        <p>Tu nombre no se muestra en las publicaciones. Evitá compartir datos personales.</p>
-      </section>
-      <section class="card side-card">
-        <div class="side-icon">💬</div>
-        <h3>¿Cómo funciona?</h3>
-        <p><strong>Feed:</strong> muro general.<br><strong>Mi grupo:</strong> muro del colegio elegido.</p>
-      </section>
-      <section class="card side-card rules-card">
-        <div class="side-icon">🛡️</div>
-        <h3>Buena onda</h3>
-        <p>No publiques amenazas, datos privados ni contenido para humillar a alguien.</p>
-      </section>
-    </aside>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
