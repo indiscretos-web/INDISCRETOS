@@ -367,6 +367,7 @@
     if (vista==="colegios") dibujarEscuelas();
     if (vista==="inicio") localStorage.setItem("indiscretos_feed_visitado","1");
     if (vista==="logros") dibujarLogros();
+    if (vista==="mensajes") iniciarMensajesPrivados();
   }
 
   document.querySelectorAll("[data-view]").forEach(b=>{
@@ -1052,6 +1053,279 @@ $("#postImage")?.addEventListener("change", ev => {
       :"¡Desbloqueaste todos los logros disponibles! 🎉";
   }
 
+
+  // Mensajería privada: los mensajes se sincronizan por Supabase y el historial visible se conserva localmente.
+  let chatAliasActual = "";
+  let chatActivoId = "";
+  let chatRefreshTimer = null;
+  const CHAT_TTL_MS = 60 * 60 * 1000;
+  const chatsGuardados = [];
+  const chatLocalKey = () => "indiscretos_chats_v1_" + (usuario?.id || "sin-cuenta");
+  const mensajesLocalKey = id => "indiscretos_mensajes_v1_" + (usuario?.id || "sin-cuenta") + "_" + id;
+
+  function leerChatsGuardados() {
+    try {
+      const lista = JSON.parse(localStorage.getItem(chatLocalKey()) || "[]");
+      chatsGuardados.splice(0, chatsGuardados.length, ...(Array.isArray(lista) ? lista : []));
+    } catch (_) { chatsGuardados.splice(0, chatsGuardados.length); }
+  }
+  function guardarChatsGuardados() {
+    try { localStorage.setItem(chatLocalKey(), JSON.stringify(chatsGuardados)); }
+    catch (_) { avisar("No se pudieron guardar los chats en este navegador."); }
+  }
+  function limpiarMensajesVencidos(chatId) {
+    try {
+      const corte = Date.now() - CHAT_TTL_MS;
+      const lista = JSON.parse(localStorage.getItem(mensajesLocalKey(chatId)) || "[]");
+      localStorage.setItem(mensajesLocalKey(chatId), JSON.stringify((Array.isArray(lista) ? lista : []).filter(m => Date.parse(m.created_at) > corte)));
+    } catch (_) {}
+  }
+  function leerMensajesLocales(chatId) {
+    limpiarMensajesVencidos(chatId);
+    try { return JSON.parse(localStorage.getItem(mensajesLocalKey(chatId)) || "[]"); } catch (_) { return []; }
+  }
+  function guardarMensajesLocales(chatId, lista) {
+    const corte = Date.now() - CHAT_TTL_MS;
+    const vigentes = lista.filter(m => Date.parse(m.created_at) > corte);
+    try { localStorage.setItem(mensajesLocalKey(chatId), JSON.stringify(vigentes)); } catch (_) {}
+  }
+  function buscarChatGuardado(userId) {
+    return chatsGuardados.find(c => c.userId === userId);
+  }
+  function mostrarAliasSetup(mostrar) {
+    $("#chatAliasSetup")?.classList.toggle("hidden", !mostrar);
+    $("#chatWorkspace")?.classList.toggle("hidden", mostrar);
+  }
+  function dibujarChatsGuardados() {
+    const cont = $("#savedChatList");
+    if (!cont) return;
+    cont.replaceChildren();
+    if (!chatsGuardados.length) {
+      cont.innerHTML = '<p class="tiny-note">Todavía no guardaste ningún chat. Buscá un alias para empezar.</p>';
+      return;
+    }
+    chatsGuardados.forEach(chat => {
+      const fila = document.createElement("button");
+      fila.type = "button";
+      fila.className = "saved-chat-row" + (chatActivoId === chat.userId ? " active" : "");
+      const nombre = document.createElement("span");
+      nombre.textContent = chat.title || chat.alias;
+      const alias = document.createElement("small");
+      alias.textContent = "@" + chat.alias;
+      fila.append(nombre, alias);
+      fila.addEventListener("click", () => abrirChatGuardado(chat.userId));
+      cont.append(fila);
+    });
+  }
+  function dibujarResultadosAlias(perfiles) {
+    const cont = $("#chatSearchResults");
+    if (!cont) return;
+    cont.replaceChildren();
+    if (!perfiles.length) {
+      cont.innerHTML = '<p class="tiny-note">No encontramos ese alias.</p>';
+      return;
+    }
+    perfiles.forEach(perfil => {
+      const fila = document.createElement("div");
+      fila.className = "chat-result-row";
+      const etiqueta = document.createElement("span");
+      etiqueta.textContent = "@" + perfil.alias;
+      const boton = document.createElement("button");
+      boton.type = "button";
+      boton.className = "secondary-btn";
+      boton.textContent = buscarChatGuardado(perfil.user_id) ? "Abrir chat" : "Escribir";
+      boton.addEventListener("click", () => {
+        let chat = buscarChatGuardado(perfil.user_id);
+        if (!chat) {
+          chat = { userId: perfil.user_id, alias: perfil.alias, title: perfil.alias };
+          chatsGuardados.push(chat);
+          guardarChatsGuardados();
+        } else {
+          chat.alias = perfil.alias;
+        }
+        abrirChatGuardado(perfil.user_id);
+      });
+      fila.append(etiqueta, boton);
+      cont.append(fila);
+    });
+  }
+  async function iniciarMensajesPrivados() {
+    try {
+      await conectar();
+      const r = await db.from("chat_profiles").select("user_id,alias").eq("user_id", usuario.id).maybeSingle();
+      if (r.error) throw r.error;
+      leerChatsGuardados();
+      if (r.data) {
+        chatAliasActual = r.data.alias;
+        $("#chatOwnAlias").textContent = chatAliasActual;
+        mostrarAliasSetup(false);
+        dibujarChatsGuardados();
+      } else {
+        mostrarAliasSetup(true);
+      }
+    } catch (error) {
+      console.error("Mensajes privados:", error);
+      if ($("#chatAliasStatus")) $("#chatAliasStatus").textContent = "No se pudo iniciar el chat. Revisá que hayas ejecutado el archivo supabase-private-messages.sql en Supabase.";
+    }
+  }
+  $("#chatAliasForm")?.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const alias = $("#chatAliasInput").value.trim();
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(alias)) {
+      $("#chatAliasStatus").textContent = "Usá de 3 a 20 letras, números o guion bajo.";
+      return;
+    }
+    const boton = ev.submitter || $("#chatAliasForm button[type=submit]");
+    boton.disabled = true;
+    try {
+      await conectar();
+      const existente = await db.from("chat_profiles").select("user_id").ilike("alias", alias).maybeSingle();
+      if (existente.error) throw existente.error;
+      if (existente.data && existente.data.user_id !== usuario.id) {
+        $("#chatAliasStatus").textContent = "Ese alias ya está ocupado. Probá con otro.";
+        return;
+      }
+      const guardado = await db.from("chat_profiles").upsert({user_id: usuario.id, alias}, {onConflict:"user_id"});
+      if (guardado.error) {
+        if (guardado.error.code === "23505") {
+          $("#chatAliasStatus").textContent = "Ese alias ya está ocupado. Probá con otro.";
+          return;
+        }
+        throw guardado.error;
+      }
+      chatAliasActual = alias;
+      $("#chatOwnAlias").textContent = alias;
+      $("#chatAliasStatus").textContent = "";
+      mostrarAliasSetup(false);
+      leerChatsGuardados();
+      dibujarChatsGuardados();
+      avisar("¡Alias guardado!");
+    } catch (error) {
+      console.error(error);
+      $("#chatAliasStatus").textContent = "No se pudo guardar. Verificá la configuración de Supabase.";
+    } finally { boton.disabled = false; }
+  });
+  $("#chatChangeAlias")?.addEventListener("click", () => {
+    $("#chatAliasInput").value = chatAliasActual;
+    mostrarAliasSetup(true);
+  });
+  $("#chatSearchForm")?.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const q = $("#chatSearchInput").value.trim();
+    const cont = $("#chatSearchResults");
+    if (q.length < 2) {
+      cont.innerHTML = '<p class="tiny-note">Escribí al menos dos caracteres.</p>';
+      return;
+    }
+    try {
+      await conectar();
+      const r = await db.from("chat_profiles").select("user_id,alias")
+        .ilike("alias", "%" + q.replace(/[%_]/g, "\\  function dibujarTodo() {") + "%")
+        .neq("user_id", usuario.id).order("alias").limit(20);
+      if (r.error) throw r.error;
+      dibujarResultadosAlias(r.data || []);
+    } catch (error) {
+      console.error(error);
+      cont.innerHTML = '<p class="tiny-note">No se pudo buscar. Revisá la configuración de Supabase.</p>';
+    }
+  });
+  async function abrirChatGuardado(userId) {
+    const chat = buscarChatGuardado(userId);
+    if (!chat) return;
+    chatActivoId = userId;
+    $("#chatRoom").classList.remove("hidden");
+    $("#chatRoomTitle").textContent = chat.title || chat.alias;
+    $("#chatRoomAlias").textContent = "Conversación con @" + chat.alias;
+    dibujarChatsGuardados();
+    await actualizarMensajesChat();
+    if (chatRefreshTimer) clearInterval(chatRefreshTimer);
+    chatRefreshTimer = setInterval(() => {
+      if (chatActivoId === userId && !document.hidden && !$("#chatMessageInput").value) actualizarMensajesChat();
+    }, 10000);
+  }
+  async function actualizarMensajesChat() {
+    const chat = buscarChatGuardado(chatActivoId);
+    if (!chat || !usuario) return;
+    const cont = $("#chatMessages");
+    try {
+      const corte = new Date(Date.now() - CHAT_TTL_MS).toISOString();
+      const local = leerMensajesLocales(chat.userId);
+      const r = await db.from("direct_messages").select("id,sender_id,recipient_id,content,created_at")
+        .or("and(sender_id.eq." + usuario.id + ",recipient_id.eq." + chat.userId + "),and(sender_id.eq." + chat.userId + ",recipient_id.eq." + usuario.id + ")")
+        .gte("created_at", corte).order("created_at", {ascending:true}).limit(500);
+      if (r.error) throw r.error;
+      const unicos = new Map();
+      [...local, ...(r.data || [])].filter(m => Date.parse(m.created_at) > Date.now() - CHAT_TTL_MS).forEach(m => unicos.set(m.id, m));
+      const mensajes = [...unicos.values()].sort((a,b) => Date.parse(a.created_at)-Date.parse(b.created_at));
+      guardarMensajesLocales(chat.userId, mensajes);
+      cont.replaceChildren();
+      if (!mensajes.length) {
+        cont.innerHTML = '<p class="tiny-note">Todavía no hay mensajes. ¡Mandá el primero!</p>';
+      } else {
+        mensajes.forEach(m => {
+          const burbuja = document.createElement("div");
+          burbuja.className = "private-message" + (m.sender_id === usuario.id ? " mine" : "");
+          const texto = document.createElement("p");
+          texto.textContent = m.content;
+          const hora = document.createElement("small");
+          hora.textContent = new Date(m.created_at).toLocaleTimeString("es-AR", {hour:"2-digit", minute:"2-digit"});
+          burbuja.append(texto, hora);
+          cont.append(burbuja);
+        });
+        cont.scrollTop = cont.scrollHeight;
+      }
+    } catch (error) {
+      console.error("Mensajes:", error);
+      cont.innerHTML = '<p class="tiny-note">No se pudieron cargar los mensajes. Revisá la configuración de Supabase.</p>';
+    }
+  }
+  $("#chatSendForm")?.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const texto = $("#chatMessageInput").value.trim();
+    const chat = buscarChatGuardado(chatActivoId);
+    if (!chat || !texto) return;
+    const boton = $("#chatSendForm button[type=submit]");
+    boton.disabled = true;
+    try {
+      await conectar();
+      const r = await db.from("direct_messages").insert({sender_id:usuario.id, recipient_id:chat.userId, content:texto}).select("id,sender_id,recipient_id,content,created_at").single();
+      if (r.error) throw r.error;
+      const lista = leerMensajesLocales(chat.userId);
+      lista.push(r.data);
+      guardarMensajesLocales(chat.userId, lista);
+      $("#chatMessageInput").value = "";
+      await actualizarMensajesChat();
+    } catch (error) {
+      console.error(error);
+      avisar("No se pudo enviar. Revisá la configuración de Supabase.");
+    } finally { boton.disabled = false; }
+  });
+  $("#chatRenameBtn")?.addEventListener("click", () => {
+    const chat = buscarChatGuardado(chatActivoId);
+    if (!chat) return;
+    const nombre = prompt("¿Qué nombre querés ponerle a este chat?", chat.title || chat.alias);
+    if (nombre === null) return;
+    const limpio = nombre.trim().slice(0, 40);
+    if (!limpio) { avisar("El nombre no puede quedar vacío."); return; }
+    chat.title = limpio;
+    guardarChatsGuardados();
+    $("#chatRoomTitle").textContent = limpio;
+    dibujarChatsGuardados();
+  });
+  $("#chatDeleteBtn")?.addEventListener("click", () => {
+    const chat = buscarChatGuardado(chatActivoId);
+    if (!chat || !confirm("¿Seguro que querés borrar este chat guardado? Se eliminará de este navegador, pero no del chat de la otra persona.")) return;
+    try { localStorage.removeItem(mensajesLocalKey(chat.userId)); } catch (_) {}
+    const idx = chatsGuardados.findIndex(c => c.userId === chat.userId);
+    if (idx >= 0) chatsGuardados.splice(idx, 1);
+    guardarChatsGuardados();
+    chatActivoId = "";
+    $("#chatRoom").classList.add("hidden");
+    if (chatRefreshTimer) clearInterval(chatRefreshTimer);
+    dibujarChatsGuardados();
+    avisar("Chat eliminado de este navegador.");
+  });
+
   function dibujarTodo() {
     dibujarFeed();
     dibujarGrupo();
@@ -1126,6 +1400,7 @@ $("#postImage")?.addEventListener("change", ev => {
     try {
       await conectar();
       await cargarRemoto(true);
+      await iniciarMensajesPrivados();
       escucharPublicacionesTrueno();
       // No redibujar el muro mientras alguien está escribiendo un comentario o respuesta:
       // el refresco reemplaza el DOM y podría borrar el borrador.
