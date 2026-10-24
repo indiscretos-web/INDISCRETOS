@@ -1855,12 +1855,9 @@ $("#postImage")?.addEventListener("change", ev => {
       if (sesionActual.error) throw sesionActual.error;
 
       if (!sesionActual.data?.session?.access_token) {
-        // Los visitantes pueden usar Mensajes con una sesión anónima propia.
-        // Esto no inicia sesión como otra cuenta ni modifica perfiles existentes.
-        const nuevaSesion = await db.auth.signInAnonymously();
-        if (nuevaSesion.error) throw nuevaSesion.error;
-        sesionActual = await db.auth.getSession();
-        if (sesionActual.error) throw sesionActual.error;
+        // No crear una identidad nueva al enviar: podría separar los mensajes
+        // del alias que el usuario ya tenía. Primero debe recuperar/iniciar sesión.
+        throw new Error("No hay una sesión activa. Iniciá sesión con tu alias y contraseña; no se creó otra cuenta.");
       }
 
       // getUser valida el token contra el servidor de Supabase.
