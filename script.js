@@ -13,6 +13,7 @@
   let fotoSeleccionada = "";
   let toastTimer;
   const comentariosAbiertos = new Set();
+  let idsPublicacionesConocidas = null;
 
   const escuelas = [
     { id:"rivadavia", nombre:'Colegio N° 1 D.E. 3 "Bernardino Rivadavia"', direccion:"Av. San Juan 1545, Constitución, CABA", mapa:"Av. San Juan 1545, Constitución, Ciudad Autónoma de Buenos Aires, Argentina" },
@@ -29,9 +30,16 @@
   ];
 
   const logros = [
-    { id:"primera", icono:"💬", titulo:"Primera publicación", descripcion:"Publicá tu primer mensaje.", premio:"Insignia Primer Paso" },
-    { id:"popular", icono:"🔥", titulo:"Empieza a sonar", descripcion:"Conseguí 5 likes en una publicación.", premio:"Insignia Popular" },
-    { id:"premium", icono:"✨", titulo:"Estrella de Indiscretos", descripcion:"Conseguí 20 likes en una publicación.", premio:"Palabras subrayadas Premium" }
+    { id:"feed", icono:"👀", titulo:"Nuevo en el chisme", descripcion:"Entrá al Feed de Indiscretos.", premio:"Insignia Nuevo en el chisme" },
+    { id:"primera", icono:"🥈", titulo:"Indiscreto aprendiz", descripcion:"Compartí tu primera publicación.", premio:"Insignia Primer Paso" },
+    { id:"comentario", icono:"💬", titulo:"Indiscreto recluta", descripcion:"Dejá tu primer comentario.", premio:"Insignia Recluta" },
+    { id:"tres", icono:"🏆", titulo:"ÉLITE", descripcion:"Publicá 3 mensajes.", premio:"Título ÉLITE" },
+    { id:"cincoLikes", icono:"✨", titulo:"INDISCRETO PREMIUM", descripcion:"Conseguí 5 likes en una publicación.", premio:"Título Premium rojo" },
+    { id:"cincoComentarios", icono:"🩵", titulo:"INDISCRETO CLASE C", descripcion:"Escribí 5 comentarios.", premio:"Título celeste" },
+    { id:"cincoPosts", icono:"💚", titulo:"INDISCRETO CLASE B", descripcion:"Llegá a 5 publicaciones.", premio:"Título verde claro" },
+    { id:"diezLikes", icono:"🟠", titulo:"INDISCRETO CLASE A", descripcion:"Conseguí 10 likes entre tus publicaciones.", premio:"Título naranja" },
+    { id:"diezPosts", icono:"💜", titulo:"INDISCRETO ABSOLUTE", descripcion:"Llegá a 10 publicaciones.", premio:"Título lila" },
+    { id:"trueno", icono:"⚡", titulo:"PODER DEL TRUENO", descripcion:"Llegá a 10 publicaciones y 20 likes en total.", premio:"Tema azul y celeste exclusivo, publicaciones eléctricas y sonido de trueno para todos" }
   ];
 
   function sonido(tipo = "click") {
@@ -48,7 +56,8 @@
         foto:[[740,.045,"square"],[988,.07,"square"]],
         reporte:[[330,.1,"sawtooth"],[220,.14,"sawtooth"]],
         error:[[260,.1,"square"],[190,.12,"square"]],
-        salir:[[660,.07,"square"],[440,.1,"square"]]
+        salir:[[660,.07,"square"],[440,.1,"square"]],
+        trueno:[[95,.24,"sawtooth"],[62,.3,"triangle"],[130,.22,"sawtooth"],[48,.38,"triangle"]]
       }[tipo] || [[520,.055,"square"]];
 
       let t = ctx.currentTime;
@@ -214,6 +223,7 @@
           tipo:p.school_id ? "grupo" : "publico",
           titulo:p.title || contenido.titulo || "",
           texto:contenido.texto ?? p.content ?? "",
+          poderTrueno:Boolean(contenido.poderTrueno),
           foto:p.image_url || "",
           likes:likesPost.length,
           liked:likesPost.some(l=>l.user_id===usuario.id),
@@ -229,6 +239,14 @@
         };
       });
 
+      const idsActuales = new Set(datos.posts.map(p=>String(p.id)));
+      if (idsPublicacionesConocidas !== null) {
+        datos.posts.forEach(p=>{
+          if (!idsPublicacionesConocidas.has(String(p.id)) && p.poderTrueno) sonido("trueno");
+        });
+      }
+      idsPublicacionesConocidas = idsActuales;
+
       dibujarTodo();
     } catch (error) {
       console.error("Supabase:",error);
@@ -238,11 +256,12 @@
 
   async function publicarRemoto({titulo,texto,foto="",grupoId=null}) {
     await conectar();
+    const estadoLogros = estadosLogros();
     const r = await db.from("posts").insert({
       user_id:usuario.id,
       author_name:"Anónimo",
       title:titulo,
-      content:JSON.stringify({texto}),
+      content:JSON.stringify({texto,poderTrueno:Boolean(estadoLogros.trueno)}),
       image_url:foto || null,
       school_id:grupoId || null
     });
@@ -336,6 +355,7 @@
     });
     $("#sidebar")?.classList.remove("open");
     if (vista==="colegios") dibujarEscuelas();
+    if (vista==="inicio") localStorage.setItem("indiscretos_feed_visitado","1");
     if (vista==="logros") dibujarLogros();
   }
 
@@ -577,11 +597,25 @@ $("#postImage")?.addEventListener("change", ev => {
 
   function estadosLogros() {
     const mias=misPublicaciones();
-    return {
-      primera:mias.length>0,
-      popular:mias.some(p=>Number(p.likes)>=5),
-      premium:mias.some(p=>Number(p.likes)>=20)
+    const comentariosMios=datos.posts.flatMap(p=>p.comentarios||[]).filter(c=>c.user_id && usuario && c.user_id===usuario.id);
+    const totalLikes=mias.reduce((total,p)=>total+(Number(p.likes)||0),0);
+    const estado={
+      feed:localStorage.getItem("indiscretos_feed_visitado")==="1",
+      primera:mias.length>=1,
+      comentario:comentariosMios.length>=1,
+      tres:mias.length>=3,
+      cincoLikes:mias.some(p=>Number(p.likes)>=5),
+      cincoComentarios:comentariosMios.length>=5,
+      cincoPosts:mias.length>=5,
+      diezLikes:totalLikes>=10,
+      diezPosts:mias.length>=10,
+      trueno:mias.length>=10 && totalLikes>=20
     };
+    return estado;
+  }
+
+  function actualizarTemaTrueno() {
+    document.body.classList.toggle("thunder-theme",Boolean(estadosLogros().trueno));
   }
 
   function construirArbolComentarios(comentarios) {
@@ -720,7 +754,9 @@ $("#postImage")?.addEventListener("change", ev => {
   function crearPost(post) {
     const e=escuelaPorId(post.grupoId);
     const articulo=document.createElement("article");
-    articulo.className="post-card";
+    const autorTieneTrueno=Boolean(post.autorId && datos.posts.some(p=>p.autorId===post.autorId && p.poderTrueno));
+    articulo.className="post-card"+(autorTieneTrueno?" thunder-post":"");
+    if (autorTieneTrueno) articulo.setAttribute("data-power","PODER DEL TRUENO");
     const cabecera=document.createElement("div");
     cabecera.className="post-header";
     const avatar=document.createElement("div");
@@ -750,7 +786,10 @@ $("#postImage")?.addEventListener("change", ev => {
     if (post.texto) {
       const burbuja=document.createElement("div");
       burbuja.className="post-bubble";
-      if (Number(post.likes)>=20) {
+      if (autorTieneTrueno) {
+        burbuja.classList.add("thunder-bubble");
+        burbuja.textContent=post.texto;
+      } else if (Number(post.likes)>=20) {
         burbuja.classList.add("premium-bubble");
         burbuja.innerHTML=escapar(post.texto).split(/(\s+)/)
           .map(w=>/^\s+$/.test(w)?w:`<span class="premium-word">${w}</span>`).join("");
@@ -922,6 +961,7 @@ $("#postImage")?.addEventListener("change", ev => {
     if (!cont) return;
     cont.replaceChildren();
     const estado=estadosLogros();
+    actualizarTemaTrueno();
     const desbloqueados=logros.filter(l=>estado[l.id]).length;
     $("#unlockedCount").textContent=desbloqueados;
     $("#totalAchievements").textContent=logros.length;
@@ -996,6 +1036,7 @@ $("#postImage")?.addEventListener("change", ev => {
       guardarLocal();
     }
     iniciarSplash();
+    localStorage.setItem("indiscretos_feed_visitado","1");
     dibujarEscuelas();
     dibujarGrupo();
     dibujarLogros();

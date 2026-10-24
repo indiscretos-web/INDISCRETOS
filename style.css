@@ -1125,3 +1125,83 @@ button:active, .upload-btn:active {
 .comments-content.hidden {
   display: none !important;
 }
+
+
+/* Recompensa Poder del Trueno: el tema completo solo se activa en el navegador
+   de quien desbloqueó el nivel 10. Las publicaciones del ganador usan estas
+   clases para que el estilo sea visible para toda la comunidad. */
+body.thunder-theme {
+  --bg: #06182b;
+  --panel: #0b2947;
+  --panel-light: #123d63;
+  --border: #1a6ba2;
+  --purple: #087ff5;
+  --purple-light: #79e4ff;
+  --yellow: #67ddff;
+  --text: #effbff;
+  --muted: #a8d8ec;
+}
+body.thunder-theme .topbar {
+  background: linear-gradient(115deg, #06264b, #0875d1 70%, #06264b);
+  border-bottom-color: #67ddff;
+}
+body.thunder-theme .sidebar,
+body.thunder-theme .right-sidebar,
+body.thunder-theme .panel,
+body.thunder-theme .achievement-card {
+  border-color: #17689f;
+}
+.post-card.thunder-post {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid #68e2ff;
+  background: linear-gradient(145deg, #0759c7, #07366f 72%, #08284d);
+  box-shadow: 0 0 0 1px rgba(104,226,255,.18), 0 0 22px rgba(0,153,255,.22);
+}
+.post-card.thunder-post::before {
+  content: "⚡ PODER DEL TRUENO";
+  display: inline-block;
+  margin: 0 0 12px;
+  padding: 4px 9px;
+  border: 1px solid #7be8ff;
+  border-radius: 999px;
+  background: rgba(2,28,68,.65);
+  color: #baf5ff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .8px;
+}
+.post-card.thunder-post .anonymous-avatar {
+  background: #0a8fe8;
+  border: 1px solid #9bf0ff;
+}
+.post-card.thunder-post .post-bubble,
+.post-card.thunder-post .thunder-bubble {
+  color: #f5fdff;
+  background: linear-gradient(135deg, #0877ed, #064ca7);
+  border: 2px solid #8cecff;
+  box-shadow: 0 0 14px rgba(91,220,255,.2);
+}
+.post-card.thunder-post .post-title,
+.post-card.thunder-post .post-author,
+.post-card.thunder-post .post-meta,
+.post-card.thunder-post .school-tag {
+  color: #d9f8ff;
+}
+.post-card.thunder-post .school-tag {
+  background: rgba(3,35,80,.7);
+  border: 1px solid rgba(119,231,255,.5);
+}
+.post-card.thunder-post .like-btn,
+.post-card.thunder-post .report-btn {
+  color: #eafaff;
+  background: #06498f;
+  border-color: #6bdbff;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .post-card.thunder-post { animation: thunderGlow 2.8s ease-in-out infinite alternate; }
+  @keyframes thunderGlow {
+    from { box-shadow: 0 0 10px rgba(0,153,255,.18); }
+    to { box-shadow: 0 0 24px rgba(91,220,255,.36); }
+  }
+}
