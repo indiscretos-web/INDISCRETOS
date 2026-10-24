@@ -1857,6 +1857,18 @@ $("#postImage")?.addEventListener("change", ev => {
     }
   }
 
+  // Al volver a la pestaña (especialmente en PC), refrescar la bandeja y el chat abierto.
+  // El intervalo puede pausarse cuando el navegador deja la pestaña en segundo plano.
+  async function refrescarMensajesAlVolver() {
+    if (document.hidden || !db || !usuario) return;
+    await sincronizarChatsEntrantes();
+    if (chatActivoId && !$("#chatMessageInput")?.value) await actualizarMensajesChat();
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refrescarMensajesAlVolver();
+  });
+  window.addEventListener("focus", () => refrescarMensajesAlVolver());
+
   // Arranque
   async function iniciar() {
     cargarLocal();
