@@ -328,6 +328,10 @@
         .eq("post_id",post.id).eq("user_id",usuario.id);
       if (r.error) throw r.error;
     } else {
+      if (Number(post.likes) >= 40) {
+        const error = new Error("MAX_LIKES");
+        throw error;
+      }
       const r = await db.from("post_likes").insert({
         post_id:post.id,user_id:usuario.id
       });
@@ -752,6 +756,26 @@ $("#postImage")?.addEventListener("change", ev => {
     return item;
   }
 
+  function etiquetasDeAutor(autorId) {
+    if (!autorId) return [];
+    const publicaciones = datos.posts.filter(p=>p.autorId===autorId);
+    const comentarios = datos.posts
+      .flatMap(p=>p.comentarios||[])
+      .filter(c=>c.user_id===autorId).length;
+    const totalLikes = publicaciones.reduce((n,p)=>n+(Number(p.likes)||0),0);
+    const etiquetas = [];
+    if (publicaciones.length >= 1) etiquetas.push({texto:"APRENDIZ",clase:"tag-aprendiz"});
+    if (comentarios >= 1) etiquetas.push({texto:"RECLUTA",clase:"tag-recluta"});
+    if (publicaciones.length >= 3) etiquetas.push({texto:"ÉLITE",clase:"tag-elite"});
+    if (publicaciones.some(p=>Number(p.likes)>=5)) etiquetas.push({texto:"PREMIUM",clase:"tag-premium"});
+    if (comentarios >= 5) etiquetas.push({texto:"CLASE C",clase:"tag-clase-c"});
+    if (publicaciones.length >= 5) etiquetas.push({texto:"CLASE B",clase:"tag-clase-b"});
+    if (totalLikes >= 10) etiquetas.push({texto:"CLASE A",clase:"tag-clase-a"});
+    if (publicaciones.length >= 10) etiquetas.push({texto:"ABSOLUTE",clase:"tag-absolute"});
+    if (publicaciones.length >= 10 && totalLikes >= 20) etiquetas.push({texto:"⚡ PODER DEL TRUENO",clase:"tag-trueno"});
+    return etiquetas;
+  }
+
   function crearPost(post) {
     const e=escuelaPorId(post.grupoId);
     const articulo=document.createElement("article");
@@ -767,13 +791,24 @@ $("#postImage")?.addEventListener("change", ev => {
     const autor=document.createElement("div");
     autor.className="post-author";
     autor.textContent="Publicado por Anónimo";
+    const etiquetasAutor = document.createElement("span");
+    etiquetasAutor.className="author-achievement-tags";
+    etiquetasDeAutor(post.autorId).forEach(item=>{
+      const insignia=document.createElement("span");
+      insignia.className="author-achievement-tag "+item.clase;
+      insignia.textContent=item.texto;
+      insignia.title="Logro desbloqueado";
+      etiquetasAutor.append(insignia);
+    });
     const fecha=document.createElement("div");
     fecha.className="post-meta";
     fecha.textContent=fechaBonita(post.creado);
     const etiqueta=document.createElement("div");
     etiqueta.className="school-tag";
     etiqueta.textContent=post.tipo==="grupo"&&e?`🌎 Feed · 🏫 ${e.nombre}`:"🌎 Publicación pública";
-    identidad.append(autor,fecha,etiqueta);
+    identidad.append(autor);
+    if (etiquetasAutor.childElementCount) identidad.append(etiquetasAutor);
+    identidad.append(fecha,etiqueta);
     cabecera.append(avatar,identidad);
     articulo.append(cabecera);
 
@@ -812,17 +847,23 @@ $("#postImage")?.addEventListener("change", ev => {
     const like=document.createElement("button");
     like.className=`like-btn${post.liked?" liked":""}`;
     like.textContent=`${post.liked?"❤️":"🤍"} ${Number(post.likes)||0} likes`;
+    like.disabled = Number(post.likes) >= 40 && !post.liked;
+    if (like.disabled) like.title = "Esta publicación llegó al máximo de 40 likes";
     like.addEventListener("click",async()=>{
       like.disabled=true;
       try {
         await cambiarLike(post);
         sonido("like");
       } catch (error) {
-        console.error(error);
-        sonido("error");
-        avisar("No se pudo guardar el like. Probá de nuevo.");
+        if (error?.message === "MAX_LIKES") {
+          avisar("Esta publicación ya llegó al máximo de 40 likes.");
+        } else {
+          console.error(error);
+          sonido("error");
+          avisar("No se pudo guardar el like. Probá de nuevo.");
+        }
       } finally {
-        like.disabled=false;
+        like.disabled = Number(post.likes) >= 40 && !post.liked;
       }
     });
 
