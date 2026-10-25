@@ -1276,26 +1276,39 @@ $("#postImage")?.addEventListener("change", ev => {
       dibujarChatsGuardados();
 
       const otrosIds = [...new Set(mensajes.map(m =>
-        m.sender_id === usuario.id ? m.recipient_id : m.sender_id
-      ).filter(Boolean).filter(id => id !== usuario.id))];
+        String(m.sender_id) === String(usuario.id) ? m.recipient_id : m.sender_id
+      ).filter(Boolean).map(String).filter(id => id !== String(usuario.id)))];
       if (!otrosIds.length) return;
 
-      const perfiles = await db.from("chat_profiles").select("user_id,alias").in("user_id", otrosIds);
-      if (perfiles.error) throw perfiles.error;
+      // Crear primero una entrada visible por cada participante detectado en los mensajes.
+      // Así la bandeja no queda vacía si el perfil no se puede consultar desde este navegador.
       let cambio = false;
-      (perfiles.data || []).forEach(perfil => {
-        let chat = buscarChatGuardado(perfil.user_id);
-        if (!chat) {
-          chat = { userId: perfil.user_id, alias: perfil.alias, title: perfil.alias };
+      otrosIds.forEach(id => {
+        if (!buscarChatGuardado(id)) {
+          const chat = { userId:id, alias:"usuario-" + id.slice(0, 6), title:"Conversación" };
           chatsGuardados.unshift(chat);
-          cambio = true;
-        } else if (chat.alias !== perfil.alias) {
-          const aliasAnterior = chat.alias;
-          chat.alias = perfil.alias;
-          if (!chat.title || chat.title === aliasAnterior) chat.title = perfil.alias;
           cambio = true;
         }
       });
+
+      const perfiles = await db.from("chat_profiles").select("user_id,alias").in("user_id", otrosIds);
+      if (!perfiles.error) {
+        (perfiles.data || []).forEach(perfil => {
+          let chat = buscarChatGuardado(String(perfil.user_id));
+          if (!chat) {
+            chat = { userId:String(perfil.user_id), alias:perfil.alias, title:perfil.alias };
+            chatsGuardados.unshift(chat);
+            cambio = true;
+          } else if (chat.alias !== perfil.alias) {
+            const aliasAnterior = chat.alias;
+            chat.alias = perfil.alias;
+            if (!chat.title || chat.title === aliasAnterior || chat.title === "Conversación") chat.title = perfil.alias;
+            cambio = true;
+          }
+        });
+      } else {
+        console.warn("No se pudieron consultar los alias de los chats; se muestran conversaciones provisionales.", perfiles.error);
+      }
       if (cambio) {
         guardarChatsGuardados();
         dibujarChatsGuardados();
