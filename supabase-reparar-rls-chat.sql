@@ -1,6 +1,6 @@
 -- Reparación de RLS para el chat privado de Indiscretos.
 -- Ejecutar una sola vez en Supabase > SQL Editor > New query.
--- Solo modifica políticas/permisos de public.direct_messages; no borra mensajes.
+-- Repara las políticas de public.direct_messages y programa la eliminación de mensajes vencidos (30 min).
 
 grant usage on schema public to authenticated;
 grant select, insert on table public.direct_messages to authenticated;
