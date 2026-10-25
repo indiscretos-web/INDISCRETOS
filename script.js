@@ -1463,8 +1463,13 @@ $("#postImage")?.addEventListener("change", ev => {
       }
     } catch (error) {
       console.error("Mensajes privados:", error);
+      // Si no se pudo restaurar la sesión, dejar visible el formulario de acceso.
+      // No borrar los chats guardados ni alterar la identidad que tenga el usuario.
+      $("#chatAccountPanel")?.classList.remove("hidden");
+      $("#chatWorkspace")?.classList.add("hidden");
       if ($("#chatAccountStatus")) $("#chatAccountStatus").textContent =
-        "No se pudo preparar el acceso: " + (error?.message || "revisá la configuración de Supabase.");
+        "No se pudo restaurar la sesión de esta computadora. Iniciá sesión con el mismo alias y contraseña de tu cuenta existente. Detalle: " +
+        (error?.message || "revisá la configuración de Supabase.");
     }
   }
   // Cuentas multiplataforma: alias como identificador y correo sintético reservado.
@@ -1908,9 +1913,23 @@ $("#postImage")?.addEventListener("change", ev => {
       if (sesionActual.error) throw sesionActual.error;
 
       if (!sesionActual.data?.session?.access_token) {
-        // No crear una identidad nueva al enviar: podría separar los mensajes
-        // del alias que el usuario ya tenía. Primero debe recuperar/iniciar sesión.
-        throw new Error("No hay una sesión activa. Iniciá sesión con tu alias y contraseña; no se creó otra cuenta.");
+        // Si el token venció mientras la página seguía abierta, intentar renovarlo
+        // antes de dar por perdida la sesión.
+        const refrescoInicial = await db.auth.refreshSession();
+        if (!refrescoInicial.error) {
+          sesionActual = await db.auth.getSession();
+          if (sesionActual.error) throw sesionActual.error;
+        }
+      }
+
+      if (!sesionActual.data?.session?.access_token) {
+        // Mostrar el acceso en pantalla en vez de dejar al usuario atrapado en el chat.
+        $("#chatAccountPanel")?.classList.remove("hidden");
+        $("#chatWorkspace")?.classList.add("hidden");
+        $("#chatAccountStatus").textContent =
+          "La sesión de esta computadora no está activa. Iniciá sesión con el mismo alias y contraseña de tu cuenta existente. No se creó ni se borró ninguna cuenta.";
+        $("#chatAccountAlias")?.focus();
+        throw new Error("No hay una sesión activa. Se abrió el acceso para iniciar sesión con tu cuenta existente.");
       }
 
       // getUser valida el token contra el servidor de Supabase.
