@@ -1159,17 +1159,34 @@ $("#postImage")?.addEventListener("change", ev => {
     try { localStorage.setItem(chatLocalKey(), JSON.stringify(chatsGuardados)); }
     catch (_) { avisar("No se pudieron guardar los chats en este navegador."); }
   }
+  const MENSAJES_VIDA_MS = 30 * 60 * 1000;
   function limpiarMensajesVencidos(chatId) {
-    // No borrar el historial: debe aparecer también en otros dispositivos.
-    // Se conserva la función para compatibilidad con las llamadas existentes.
+    try {
+      const clave = mensajesLocalKey(chatId);
+      const lista = JSON.parse(localStorage.getItem(clave) || "[]");
+      if (!Array.isArray(lista)) {
+        localStorage.removeItem(clave);
+        return;
+      }
+      const limite = Date.now() - MENSAJES_VIDA_MS;
+      const vigentes = lista.filter(m => {
+        const creado = Date.parse(m.created_at || "");
+        return Number.isFinite(creado) && creado >= limite;
+      });
+      localStorage.setItem(clave, JSON.stringify(vigentes));
+    } catch (_) {}
   }
   function leerMensajesLocales(chatId) {
     limpiarMensajesVencidos(chatId);
     try { return JSON.parse(localStorage.getItem(mensajesLocalKey(chatId)) || "[]"); } catch (_) { return []; }
   }
   function guardarMensajesLocales(chatId, lista) {
-    // Guardar el historial completo; no ocultar mensajes por antigüedad.
-    try { localStorage.setItem(mensajesLocalKey(chatId), JSON.stringify(lista)); } catch (_) {}
+    const limite = Date.now() - MENSAJES_VIDA_MS;
+    const vigentes = (Array.isArray(lista) ? lista : []).filter(m => {
+      const creado = Date.parse(m.created_at || "");
+      return Number.isFinite(creado) && creado >= limite;
+    });
+    try { localStorage.setItem(mensajesLocalKey(chatId), JSON.stringify(vigentes)); } catch (_) {}
   }
   function buscarChatGuardado(userId) {
     return chatsGuardados.find(c => c.userId === userId);
@@ -1800,8 +1817,10 @@ $("#postImage")?.addEventListener("change", ev => {
     const cont = $("#chatMessages");
     try {
       const local = leerMensajesLocales(chat.userId);
+      const limiteMensajes = new Date(Date.now() - MENSAJES_VIDA_MS).toISOString();
       const r = await db.from("direct_messages").select("id,sender_id,recipient_id,content,created_at")
         .or("and(sender_id.eq." + usuario.id + ",recipient_id.eq." + chat.userId + "),and(sender_id.eq." + chat.userId + ",recipient_id.eq." + usuario.id + ")")
+        .gte("created_at", limiteMensajes)
         .order("created_at", {ascending:true}).limit(1000);
       if (r.error) throw r.error;
       const unicos = new Map();
