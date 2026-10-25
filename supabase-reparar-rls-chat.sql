@@ -29,7 +29,7 @@ create policy "direct_messages_read_participant_recent"
   to authenticated
   using (
     (sender_id = (select auth.uid()) or recipient_id = (select auth.uid()))
-    and created_at > now() - interval '1 hour'
+    and created_at > now() - interval '30 minutes'
   );
 
 create policy "direct_messages_insert_as_sender"
@@ -41,3 +41,25 @@ create policy "direct_messages_insert_as_sender"
     and recipient_id <> (select auth.uid())
     and char_length(trim(content)) between 1 and 1000
   );
+
+
+-- Alinear el vencimiento físico con la interfaz: 30 minutos.
+-- Reemplaza la tarea anterior por una sola tarea, ejecutada cada minuto.
+create extension if not exists pg_cron;
+
+do $$
+declare existing_job record;
+begin
+  for existing_job in
+    select jobid from cron.job where jobname = 'indiscretos-delete-expired-messages'
+  loop
+    perform cron.unschedule(existing_job.jobid);
+  end loop;
+
+  perform cron.schedule(
+    'indiscretos-delete-expired-messages',
+    '* * * * *',
+    $job$delete from public.direct_messages where created_at <= now() - interval '30 minutes';$job$
+  );
+end
+$$;
