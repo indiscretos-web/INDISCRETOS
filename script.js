@@ -1226,14 +1226,28 @@ $("#postImage")?.addEventListener("change", ev => {
   async function sincronizarChatsEntrantes() {
     if (!usuario || !db) return;
     try {
-      const recibidos = await db.from("direct_messages")
-        .select("sender_id,recipient_id,created_at")
-        .or("sender_id.eq." + usuario.id + ",recipient_id.eq." + usuario.id)
-        .order("created_at", {ascending:false})
-        .limit(1000);
+      // Consultas separadas: evitan que el filtro .or() anidado de PostgREST
+      // deje la bandeja vacía en ciertos navegadores/sesiones.
+      const [recibidos, enviados] = await Promise.all([
+        db.from("direct_messages")
+          .select("sender_id,recipient_id,created_at")
+          .eq("recipient_id", usuario.id)
+          .order("created_at", {ascending:false})
+          .limit(1000),
+        db.from("direct_messages")
+          .select("sender_id,recipient_id,created_at")
+          .eq("sender_id", usuario.id)
+          .order("created_at", {ascending:false})
+          .limit(1000)
+      ]);
       if (recibidos.error) throw recibidos.error;
+      if (enviados.error) throw enviados.error;
 
-      const mensajes = recibidos.data || [];
+      const porClave = new Map();
+      [...(recibidos.data || []), ...(enviados.data || [])].forEach(m =>
+        porClave.set(String(m.sender_id) + "|" + String(m.recipient_id) + "|" + String(m.created_at), m)
+      );
+      const mensajes = [...porClave.values()].sort((a,b) => Date.parse(b.created_at) - Date.parse(a.created_at));
       const estadoSync = $("#chatSyncStatus");
       if (estadoSync && usuario?.is_anonymous === false) {
         const recibidosAhora = mensajes.filter(m => m.recipient_id === usuario.id && m.sender_id !== usuario.id).length;
@@ -1289,9 +1303,9 @@ $("#postImage")?.addEventListener("change", ev => {
     } catch (error) {
       console.warn("No se pudieron revisar los mensajes recibidos:", error);
       const estado = $("#chatSyncStatus");
-      if (estado && usuario?.is_anonymous === false) {
+      if (estado) {
         const detalle = [error?.code, error?.message, error?.details, error?.hint].filter(Boolean).join(" — ");
-        estado.textContent = "Error al sincronizar @" + (chatAliasActual || "tu cuenta") + ": " + (detalle || "error de conexión con Supabase");
+        estado.textContent = "No se pudo sincronizar la bandeja" + (chatAliasActual ? " de @" + chatAliasActual : "") + ": " + (detalle || "error de conexión con Supabase");
         estado.classList.remove("hidden");
       }
     }
@@ -1813,13 +1827,25 @@ $("#postImage")?.addEventListener("change", ev => {
     try {
       const local = leerMensajesLocales(chat.userId);
       const limiteMensajes = new Date(Date.now() - MENSAJES_VIDA_MS).toISOString();
-      const r = await db.from("direct_messages").select("id,sender_id,recipient_id,content,created_at")
-        .or("and(sender_id.eq." + usuario.id + ",recipient_id.eq." + chat.userId + "),and(sender_id.eq." + chat.userId + ",recipient_id.eq." + usuario.id + ")")
-        .gte("created_at", limiteMensajes)
-        .order("created_at", {ascending:true}).limit(1000);
-      if (r.error) throw r.error;
+      // Leer cada dirección por separado en lugar de depender de un .or() compuesto.
+      // Así se recuperan tanto los mensajes enviados desde esta PC como los recibidos.
+      const columnas = "id,sender_id,recipient_id,content,created_at";
+      const [enviados, recibidos] = await Promise.all([
+        db.from("direct_messages").select(columnas)
+          .eq("sender_id", usuario.id).eq("recipient_id", chat.userId)
+          .gte("created_at", limiteMensajes)
+          .order("created_at", {ascending:true}).limit(1000),
+        db.from("direct_messages").select(columnas)
+          .eq("sender_id", chat.userId).eq("recipient_id", usuario.id)
+          .gte("created_at", limiteMensajes)
+          .order("created_at", {ascending:true}).limit(1000)
+      ]);
+      if (enviados.error) throw enviados.error;
+      if (recibidos.error) throw recibidos.error;
       const unicos = new Map();
-      [...local, ...(r.data || [])].forEach(m => unicos.set(m.id, m));
+      [...local, ...(enviados.data || []), ...(recibidos.data || [])].forEach(m => {
+        if (m?.id) unicos.set(String(m.id), m);
+      });
       const mensajes = [...unicos.values()].sort((a,b) => Date.parse(a.created_at)-Date.parse(b.created_at));
       guardarMensajesLocales(chat.userId, mensajes);
       const ultimoRecibido = mensajes
