@@ -48,7 +48,7 @@ create policy "Solo participantes leen mensajes recientes"
   on public.direct_messages for select to authenticated
   using (
     (sender_id = auth.uid() or recipient_id = auth.uid())
-    and created_at > now() - interval '1 hour'
+    and created_at > now() - interval '30 minutes'
   );
 
 drop policy if exists "Enviar mensaje como uno mismo" on public.direct_messages;
@@ -64,17 +64,24 @@ create policy "Enviar mensaje como uno mismo"
 -- Si pg_cron no está habilitado en el proyecto, activarlo desde Supabase > Database > Extensions.
 create extension if not exists pg_cron;
 
-do $$
+do $
+declare existing_job record;
 begin
-  if not exists (select 1 from cron.job where jobname = 'indiscretos-delete-expired-messages') then
-    perform cron.schedule(
-      'indiscretos-delete-expired-messages',
-      '* * * * *',
-      $job$delete from public.direct_messages where created_at <= now() - interval '1 hour';$job$
-    );
-  end if;
+  -- Reemplazar la tarea anterior si existía para que el vencimiento sea consistente
+  -- con la interfaz (30 minutos), sin duplicar tareas programadas.
+  for existing_job in
+    select jobid from cron.job where jobname = 'indiscretos-delete-expired-messages'
+  loop
+    perform cron.unschedule(existing_job.jobid);
+  end loop;
+
+  perform cron.schedule(
+    'indiscretos-delete-expired-messages',
+    '* * * * *',
+    $job$delete from public.direct_messages where created_at <= now() - interval '30 minutes';$job$
+  );
 end
-$$;
+$;
 
 
 -- Reglas nuevas para alias: 3 a 8 caracteres, sin espacios ni nombres comunes.
