@@ -171,14 +171,9 @@
         // no crear otra automáticamente y separar al usuario de sus mensajes anteriores.
         try { localStorage.setItem("indiscretos_auth_identity_seen", "1"); } catch (_) {}
       } else {
-        let identidadAnterior = false;
-        try { identidadAnterior = localStorage.getItem("indiscretos_auth_identity_seen") === "1"; } catch (_) {}
-        if (identidadAnterior) {
-          // No reemplazar una identidad perdida por otra. Dejar que la página cargue
-          // y permitir que el usuario recupere su cuenta desde el panel de acceso.
-          usuario = null;
-          return;
-        }
+        // Sin sesión guardada en este navegador: iniciar una identidad propia.
+        // Para recuperar una cuenta permanente de otro dispositivo, el usuario
+        // debe iniciar sesión con su alias y contraseña desde el panel.
         const resultado = await db.auth.signInAnonymously();
         if (resultado.error) throw resultado.error;
         usuario = resultado.data.user;
