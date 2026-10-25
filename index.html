@@ -128,7 +128,7 @@
 
       <!-- MENSAJES PRIVADOS -->
       <section class="view hidden" id="view-mensajes">
-        <div class="page-heading"><span class="eyebrow">CONVERSACIONES PRIVADAS</span><h2>💬 Mensajes privados</h2><p>Los mensajes desaparecen después de una hora. Tus chats guardados permanecen en este navegador.</p></div>
+        <div class="page-heading"><span class="eyebrow">CONVERSACIONES PRIVADAS</span><h2>💬 Mensajes privados</h2><p>Los mensajes desaparecen después de 30 minutos. Tus chats guardados permanecen en este navegador.</p></div>
         <section class="card" id="chatAccountPanel">
           <h3>Cuenta para usar en varios dispositivos</h3>
           <p class="tiny-note">Usá el mismo alias y contraseña en el celular y la computadora. Elegí una contraseña de al menos 8 caracteres y no la compartas.</p>
@@ -156,7 +156,7 @@
           <form id="chatSearchForm" class="chat-form"><label for="chatSearchInput">Buscar a alguien por su alias</label><div class="chat-search-row"><input id="chatSearchInput" maxlength="8" autocomplete="off" placeholder="Buscá un usuario"><button class="primary-btn" type="submit">Buscar</button></div></form>
           <div id="chatSearchResults" class="chat-list"></div>
           <h3 class="chat-subtitle">Chats guardados</h3><div id="savedChatList" class="chat-list"></div>
-          <section class="chat-room hidden" id="chatRoom"><div class="chat-room-header"><div><h3 id="chatRoomTitle"></h3><p id="chatRoomAlias"></p></div><button class="secondary-btn" id="chatRenameBtn" type="button">✏️ Nombre</button><button class="danger-icon-btn" id="chatDeleteBtn" type="button" aria-label="Borrar chat" title="Borrar chat">🗑️</button></div><div id="chatMessages" class="chat-messages" aria-live="polite"></div><form id="chatSendForm" class="chat-form"><label class="sr-only" for="chatMessageInput">Mensaje privado</label><textarea id="chatMessageInput" maxlength="1000" rows="2" placeholder="Escribí un mensaje..." required></textarea><button class="primary-btn" type="submit">Enviar</button></form><p class="tiny-note">Los mensajes vencen una hora después de enviarse. El historial local también se limpia al vencer.</p></section>
+          <section class="chat-room hidden" id="chatRoom"><div class="chat-room-header"><div><h3 id="chatRoomTitle"></h3><p id="chatRoomAlias"></p></div><button class="secondary-btn" id="chatRenameBtn" type="button">✏️ Nombre</button><button class="danger-icon-btn" id="chatDeleteBtn" type="button" aria-label="Borrar chat" title="Borrar chat">🗑️</button></div><div id="chatMessages" class="chat-messages" aria-live="polite"></div><form id="chatSendForm" class="chat-form"><label class="sr-only" for="chatMessageInput">Mensaje privado</label><textarea id="chatMessageInput" maxlength="1000" rows="2" placeholder="Escribí un mensaje..." required></textarea><button class="primary-btn" type="submit">Enviar</button></form><p class="tiny-note">Los mensajes vencen 30 minutos después de enviarse. El historial local también se limpia al vencer.</p></section>
         </section>
       </section>
 
@@ -169,6 +169,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="script.js?v=20261025-42"></script>
+  <script src="script.js?v=20261025-43"></script>
 </body>
 </html>
